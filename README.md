@@ -1,4 +1,4 @@
-afch-bnwp [![Build Status](https://github.com/wikimedia-gadgets/afc-helper/actions/workflows/unit_tests.yml/badge.svg)]
+afch-bnwp
 ============
 
 A tool for reviewing Articles for Creation submissions on the Bangla Wikipedia, rewritten using clear, object-oriented JavaScript with a focus on killing bloat while adding value. This has been localized for Bangla Wikipedia.
@@ -10,7 +10,7 @@ A tool for reviewing Articles for Creation submissions on the Bangla Wikipedia, 
 ### Usage
 Warning: You take full responsibility for any action you perform using the Articles for Creation Helper Script. You must understand Wikipedia policies and use this tool within these policies, or risk being blocked from editing.
 
-The script can be installed on the Chinese Wikipedia by following the instructions at [![WP:AFCH](https://bn.wikipedia.org/wiki/WP:AFCH)].
+The script can be installed on the Chinese Wikipedia by following the instructions at [WP:AFCH](https://bn.wikipedia.org/wiki/WP:AFCH).
 
 ### License
 
