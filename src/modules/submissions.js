@@ -1,4 +1,4 @@
-/* Translated and adapted from
+/* https://github.com/Tanbiruzzaman/afch-bnwp, translate and adapted from
  * https://github.com/WPAFC/afch-rewrite */
 //<nowiki>
 
