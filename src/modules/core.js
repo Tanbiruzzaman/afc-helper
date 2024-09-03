@@ -1,14 +1,573 @@
-// <nowiki>
+/* https://github.com/Tanbiruzzaman/afch-bnwp, translated and adapted from
+ * https://github.com/WPAFC/afch-rewrite */
+
+var Hogan = {};
+
+( function ( Hogan, useArrayBuffer ) {
+	Hogan.Template = function ( renderFunc, text, compiler, options ) {
+		this.r = renderFunc || this.r;
+		this.c = compiler;
+		this.options = options;
+		this.text = text || '';
+		this.buf = ( useArrayBuffer ) ? [] : '';
+	};
+
+	Hogan.Template.prototype = {
+		// render: replaced by generated code.
+		r: function ( context, partials, indent ) {
+			return '';
+		},
+
+		// variable escaping
+		v: hoganEscape,
+
+		// triple stache
+		t: coerceToString,
+
+		render: function render( context, partials, indent ) {
+			return this.ri( [ context ], partials || {}, indent );
+		},
+
+		// render internal -- a hook for overrides that catches partials too
+		ri: function ( context, partials, indent ) {
+			return this.r( context, partials, indent );
+		},
+
+		// tries to find a partial in the curent scope and render it
+		rp: function ( name, context, partials, indent ) {
+			var partial = partials[ name ];
+
+			if ( !partial ) {
+				return '';
+			}
+
+			if ( this.c && typeof partial == 'string' ) {
+				partial = this.c.compile( partial, this.options );
+			}
+
+			return partial.ri( context, partials, indent );
+		},
+
+		// render a section
+		rs: function ( context, partials, section ) {
+			var tail = context[ context.length - 1 ];
+
+			if ( !isArray( tail ) ) {
+				section( context, partials, this );
+				return;
+			}
+
+			for ( var i = 0; i < tail.length; i++ ) {
+				context.push( tail[ i ] );
+				section( context, partials, this );
+				context.pop();
+			}
+		},
+
+		// maybe start a section
+		s: function ( val, ctx, partials, inverted, start, end, tags ) {
+			var pass;
+
+			if ( isArray( val ) && val.length === 0 ) {
+				return false;
+			}
+
+			if ( typeof val == 'function' ) {
+				val = this.ls( val, ctx, partials, inverted, start, end, tags );
+			}
+
+			pass = ( val === '' ) || !!val;
+
+			if ( !inverted && pass && ctx ) {
+				ctx.push( ( typeof val == 'object' ) ? val : ctx[ ctx.length - 1 ] );
+			}
+
+			return pass;
+		},
+
+		// find values with dotted names
+		d: function ( key, ctx, partials, returnFound ) {
+			var names = key.split( '.' ),
+				val = this.f( names[ 0 ], ctx, partials, returnFound ), cx = null;
+
+			if ( key === '.' && isArray( ctx[ ctx.length - 2 ] ) ) {
+				return ctx[ ctx.length - 1 ];
+			}
+
+			for ( var i = 1; i < names.length; i++ ) {
+				if ( val && typeof val == 'object' && names[ i ] in val ) {
+					cx = val;
+					val = val[ names[ i ] ];
+				} else {
+					val = '';
+				}
+			}
+
+			if ( returnFound && !val ) {
+				return false;
+			}
+
+			if ( !returnFound && typeof val == 'function' ) {
+				ctx.push( cx );
+				val = this.lv( val, ctx, partials );
+				ctx.pop();
+			}
+
+			return val;
+		},
+
+		// find values with normal names
+		f: function ( key, ctx, partials, returnFound ) {
+			var val = false, v = null, found = false;
+
+			for ( var i = ctx.length - 1; i >= 0; i-- ) {
+				v = ctx[ i ];
+				if ( v && typeof v == 'object' && key in v ) {
+					val = v[ key ];
+					found = true;
+					break;
+				}
+			}
+
+			if ( !found ) {
+				return ( returnFound ) ? false : '';
+			}
+
+			if ( !returnFound && typeof val == 'function' ) {
+				val = this.lv( val, ctx, partials );
+			}
+
+			return val;
+		},
+
+		// higher order templates
+		ho: function ( val, cx, partials, text, tags ) {
+			var compiler = this.c;
+			var options = this.options;
+			options.delimiters = tags;
+			text = val.call( cx, text );
+			text = ( text == null ) ? String( text ) : text.toString();
+			this.b( compiler.compile( text, options ).render( cx, partials ) );
+			return false;
+		},
+
+		// template result buffering
+		b: ( useArrayBuffer ) ?
+			function ( s ) {
+				this.buf.push( s );
+			} :
+			function ( s ) {
+				this.buf += s;
+			},
+		fl: ( useArrayBuffer ) ?
+			function () {
+				var r = this.buf.join( '' );
+				this.buf = [];
+				return r;
+			} :
+			function () {
+				var r = this.buf;
+				this.buf = '';
+				return r;
+			},
+
+		// lambda replace section
+		ls: function ( val, ctx, partials, inverted, start, end, tags ) {
+			var cx = ctx[ ctx.length - 1 ], t = null;
+
+			if ( !inverted && this.c && val.length > 0 ) {
+				return this.ho( val, cx, partials, this.text.substring( start, end ), tags );
+			}
+
+			t = val.call( cx );
+
+			if ( typeof t == 'function' ) {
+				if ( inverted ) {
+					return true;
+				} else if ( this.c ) {
+					return this.ho( t, cx, partials, this.text.substring( start, end ), tags );
+				}
+			}
+
+			return t;
+		},
+
+		// lambda replace variable
+		lv: function ( val, ctx, partials ) {
+			var cx = ctx[ ctx.length - 1 ];
+			var result = val.call( cx );
+
+			if ( typeof result == 'function' ) {
+				result = coerceToString( result.call( cx ) );
+				if ( this.c && !result.indexOf( '{\u007B' ) ) {
+					return this.c.compile( result, this.options ).render( cx, partials );
+				}
+			}
+
+			return coerceToString( result );
+		}
+
+	};
+
+	var rAmp = /&/g, rLt = /</g, rGt = />/g, rApos = /\'/g, rQuot = /\"/g,
+		hChars = /[&<>\"\']/;
+
+	function coerceToString( val ) {
+		return String( ( val === null || val === undefined ) ? '' : val );
+	}
+
+	function hoganEscape( str ) {
+		str = coerceToString( str );
+		return hChars.test( str ) ? str.replace( rAmp, '&amp;' )
+			.replace( rLt, '&lt;' )
+			.replace( rGt, '&gt;' )
+			.replace( rApos, '&#39;' )
+			.replace( rQuot, '&quot;' ) :
+			str;
+	}
+
+	var isArray = Array.isArray || function ( a ) {
+		return Object.prototype.toString.call( a ) === '[object Array]';
+	};
+}( typeof exports !== 'undefined' ? exports : Hogan ) );
+
+( function ( Hogan ) {
+// Setup regex	assignments
+// remove whitespace according to Mustache spec
+	var rIsWhitespace = /\S/, rQuot = /\"/g, rNewline = /\n/g, rCr = /\r/g,
+		rSlash = /\\/g, tagTypes = {
+			'#': 1,
+			'^': 2,
+			'/': 3,
+			'!': 4,
+			'>': 5,
+			'<': 6,
+			'=': 7,
+			_v: 8,
+			'{': 9,
+			'&': 10
+		};
+
+	Hogan.scan = function scan( text, delimiters ) {
+		var len = text.length, IN_TEXT = 0, IN_TAG_TYPE = 1, IN_TAG = 2,
+			state = IN_TEXT, tagType = null, tag = null, buf = '', tokens = [],
+			seenTag = false, i = 0, lineStart = 0, otag = '{{', ctag = '}}';
+
+		function addBuf() {
+			if ( buf.length > 0 ) {
+				tokens.push( String( buf ) );
+				buf = '';
+			}
+		}
+
+		function lineIsWhitespace() {
+			var isAllWhitespace = true;
+			for ( var j = lineStart; j < tokens.length; j++ ) {
+				isAllWhitespace =
+			( tokens[ j ].tag && tagTypes[ tokens[ j ].tag ] < tagTypes._v ) ||
+			( !tokens[ j ].tag && tokens[ j ].match( rIsWhitespace ) === null );
+				if ( !isAllWhitespace ) {
+					return false;
+				}
+			}
+
+			return isAllWhitespace;
+		}
+
+		function filterLine( haveSeenTag, noNewLine ) {
+			addBuf();
+
+			if ( haveSeenTag && lineIsWhitespace() ) {
+				for ( var j = lineStart, next; j < tokens.length; j++ ) {
+					if ( !tokens[ j ].tag ) {
+						if ( ( next = tokens[ j + 1 ] ) && next.tag == '>' ) {
+							// set indent to token value
+							next.indent = tokens[ j ].toString();
+						}
+						tokens.splice( j, 1 );
+					}
+				}
+			} else if ( !noNewLine ) {
+				tokens.push( { tag: '\n' } );
+			}
+
+			seenTag = false;
+			lineStart = tokens.length;
+		}
+
+		function changeDelimiters( text, index ) {
+			var close = '=' + ctag, closeIndex = text.indexOf( close, index ),
+				delimiters =
+			trim( text.substring( text.indexOf( '=', index ) + 1, closeIndex ) )
+				.split( ' ' );
+
+			otag = delimiters[ 0 ];
+			ctag = delimiters[ 1 ];
+
+			return closeIndex + close.length - 1;
+		}
+
+		if ( delimiters ) {
+			delimiters = delimiters.split( ' ' );
+			otag = delimiters[ 0 ];
+			ctag = delimiters[ 1 ];
+		}
+
+		for ( i = 0; i < len; i++ ) {
+			if ( state == IN_TEXT ) {
+				if ( tagChange( otag, text, i ) ) {
+					--i;
+					addBuf();
+					state = IN_TAG_TYPE;
+				} else {
+					if ( text.charAt( i ) == '\n' ) {
+						filterLine( seenTag );
+					} else {
+						buf += text.charAt( i );
+					}
+				}
+			} else if ( state == IN_TAG_TYPE ) {
+				i += otag.length - 1;
+				tag = tagTypes[ text.charAt( i + 1 ) ];
+				tagType = tag ? text.charAt( i + 1 ) : '_v';
+				if ( tagType == '=' ) {
+					i = changeDelimiters( text, i );
+					state = IN_TEXT;
+				} else {
+					if ( tag ) {
+						i++;
+					}
+					state = IN_TAG;
+				}
+				seenTag = i;
+			} else {
+				if ( tagChange( ctag, text, i ) ) {
+					tokens.push( {
+						tag: tagType,
+						n: trim( buf ),
+						otag: otag,
+						ctag: ctag,
+						i: ( tagType == '/' ) ? seenTag - ctag.length : i + otag.length
+					} );
+					buf = '';
+					i += ctag.length - 1;
+					state = IN_TEXT;
+					if ( tagType == '{' ) {
+						if ( ctag == '}}' ) {
+							i++;
+						} else {
+							cleanTripleStache( tokens[ tokens.length - 1 ] );
+						}
+					}
+				} else {
+					buf += text.charAt( i );
+				}
+			}
+		}
+
+		filterLine( seenTag, true );
+
+		return tokens;
+	};
+
+	function cleanTripleStache( token ) {
+		if ( token.n.substr( token.n.length - 1 ) === '}' ) {
+			token.n = token.n.substring( 0, token.n.length - 1 );
+		}
+	}
+
+	function trim( s ) {
+		if ( s.trim ) {
+			return s.trim();
+		}
+
+		return s.replace( /^\s*|\s*$/g, '' );
+	}
+
+	function tagChange( tag, text, index ) {
+		if ( text.charAt( index ) != tag.charAt( 0 ) ) {
+			return false;
+		}
+
+		for ( var i = 1, l = tag.length; i < l; i++ ) {
+			if ( text.charAt( index + i ) != tag.charAt( i ) ) {
+				return false;
+			}
+		}
+
+		return true;
+	}
+
+	function buildTree( tokens, kind, stack, customTags ) {
+		var instructions = [], opener = null, token = null;
+
+		while ( tokens.length > 0 ) {
+			token = tokens.shift();
+			if ( token.tag == '#' || token.tag == '^' || isOpener( token, customTags ) ) {
+				stack.push( token );
+				token.nodes = buildTree( tokens, token.tag, stack, customTags );
+				instructions.push( token );
+			} else if ( token.tag == '/' ) {
+				if ( stack.length === 0 ) {
+					throw new Error( 'Closing tag without opener: /' + token.n );
+				}
+				opener = stack.pop();
+				if ( token.n != opener.n && !isCloser( token.n, opener.n, customTags ) ) {
+					throw new Error( 'Nesting error: ' + opener.n + ' vs. ' + token.n );
+				}
+				opener.end = token.i;
+				return instructions;
+			} else {
+				instructions.push( token );
+			}
+		}
+
+		if ( stack.length > 0 ) {
+			throw new Error( 'missing closing tag: ' + stack.pop().n );
+		}
+
+		return instructions;
+	}
+
+	function isOpener( token, tags ) {
+		for ( var i = 0, l = tags.length; i < l; i++ ) {
+			if ( tags[ i ].o == token.n ) {
+				token.tag = '#';
+				return true;
+			}
+		}
+	}
+
+	function isCloser( close, open, tags ) {
+		for ( var i = 0, l = tags.length; i < l; i++ ) {
+			if ( tags[ i ].c == close && tags[ i ].o == open ) {
+				return true;
+			}
+		}
+	}
+
+	Hogan.generate = function ( tree, text, options ) {
+		var code = 'var _=this;_.b(i=i||"");' + walk( tree ) + 'return _.fl();';
+		if ( options.asString ) {
+			return 'function(c,p,i){' + code + ';}';
+		}
+
+		return new Hogan.Template(
+			new Function( 'c', 'p', 'i', code ), text, Hogan, options );
+	};
+
+	function esc( s ) {
+		return s.replace( rSlash, '\\\\' )
+			.replace( rQuot, '\\\"' )
+			.replace( rNewline, '\\n' )
+			.replace( rCr, '\\r' );
+	}
+
+	function chooseMethod( s ) {
+		return ( !s.indexOf( '.' ) ) ? 'd' : 'f';
+	}
+
+	function walk( tree ) {
+		var code = '';
+		for ( var i = 0, l = tree.length; i < l; i++ ) {
+			var tag = tree[ i ].tag;
+			if ( tag == '#' ) {
+				code += section(
+					tree[ i ].nodes, tree[ i ].n, chooseMethod( tree[ i ].n ), tree[ i ].i,
+					tree[ i ].end, tree[ i ].otag + ' ' + tree[ i ].ctag );
+			} else if ( tag == '^' ) {
+				code +=
+			invertedSection( tree[ i ].nodes, tree[ i ].n, chooseMethod( tree[ i ].n ) );
+			} else if ( tag == '<' || tag == '>' ) {
+				code += partial( tree[ i ] );
+			} else if ( tag == '{' || tag == '&' ) {
+				code += tripleStache( tree[ i ].n, chooseMethod( tree[ i ].n ) );
+			} else if ( tag == '\n' ) {
+				code += text( '"\\n"' + ( tree.length - 1 == i ? '' : ' + i' ) );
+			} else if ( tag == '_v' ) {
+				code += variable( tree[ i ].n, chooseMethod( tree[ i ].n ) );
+			} else if ( tag === undefined ) {
+				code += text( '"' + esc( tree[ i ] ) + '"' );
+			}
+		}
+		return code;
+	}
+
+	function section( nodes, id, method, start, end, tags ) {
+		return 'if(_.s(_.' + method + '("' + esc( id ) + '",c,p,1),' +
+		'c,p,0,' + start + ',' + end + ',"' + tags + '")){' +
+		'_.rs(c,p,' +
+		'function(c,p,_){' + walk( nodes ) + '});c.pop();}';
+	}
+
+	function invertedSection( nodes, id, method ) {
+		return 'if(!_.s(_.' + method + '("' + esc( id ) + '",c,p,1),c,p,1,0,0,"")){' +
+		walk( nodes ) + '};';
+	}
+
+	function partial( tok ) {
+		return '_.b(_.rp("' + esc( tok.n ) + '",c,p,"' + ( tok.indent || '' ) + '"));';
+	}
+
+	function tripleStache( id, method ) {
+		return '_.b(_.t(_.' + method + '("' + esc( id ) + '",c,p,0)));';
+	}
+
+	function variable( id, method ) {
+		return '_.b(_.v(_.' + method + '("' + esc( id ) + '",c,p,0)));';
+	}
+
+	function text( id ) {
+		return '_.b(' + id + ');';
+	}
+
+	Hogan.parse =
+	function ( tokens, text, options ) {
+		options = options || {};
+		return buildTree( tokens, '', [], options.sectionTags || [] );
+	};
+
+	Hogan.cache = {};
+
+	Hogan.compile = function ( text, options ) {
+		// options
+		//
+		// asString: false (default)
+		//
+		// sectionTags: [{o: '_foo', c: 'foo'}]
+		// An array of object with o and c fields that indicate names for custom
+		// section tags. The example above allows parsing of {{_foo}}{{/foo}}.
+		//
+		// delimiters: A string that overrides the default delimiters.
+		// Example: "<% %>"
+		//
+		options = options || {};
+
+		var key = text + '||' + !!options.asString;
+
+		var t = this.cache[ key ];
+
+		if ( t ) {
+			return t;
+		}
+
+		t = this.generate(
+			this.parse( this.scan( text, options.delimiters ), text, options ), text,
+			options );
+		return this.cache[ key ] = t;
+	};
+}( typeof exports !== 'undefined' ? exports : Hogan ) );
+
+//<nowiki>
 ( function ( AFCH, $, mw ) {
 	$.extend( AFCH, {
 
 		/**
-		 * Log anything to the console
-		 *
-		 * @param {any} thing(s)
-		 */
+	 * Log anything to the console
+	 * @param {anything} thing(s)
+	 */
 		log: function () {
-			const args = Array.prototype.slice.call( arguments );
+			var args = Array.prototype.slice.call( arguments );
 
 			if ( AFCH.consts.beta && console && console.log ) {
 				args.unshift( 'AFCH:' );
@@ -17,28 +576,25 @@
 		},
 
 		/**
-		 * Functions called when AFCH.destroy() is run
-		 *
-		 * @internal
-		 * @type {Array}
-		 */
+	 * @internal Functions called when AFCH.destroy() is run
+	 * @type {Array}
+	 */
 		_destroyFunctions: [],
 
 		/**
-		 * Add a function to run when AFCH.destroy() is run
-		 *
-		 * @param {Function} fn
-		 */
+	 * Add a function to run when AFCH.destroy() is run
+	 * @param {Function} fn
+	 */
 		addDestroyFunction: function ( fn ) {
 			AFCH._destroyFunctions.push( fn );
 		},
 
 		/**
-		 * Destroys all AFCH-y things. Subscripts can add custom
-		 * destroy functions by running AFCH.addDestroyFunction( fn )
-		 */
+	 * Destroys all AFCH-y things. Subscripts can add custom
+	 * destroy functions by running AFCH.addDestroyFunction( fn )
+	 */
 		destroy: function () {
-			$.each( AFCH._destroyFunctions, ( _, fn ) => {
+			$.each( AFCH._destroyFunctions, function ( _, fn ) {
 				fn();
 			} );
 
@@ -46,16 +602,16 @@
 		},
 
 		/**
-		 * Prepares the AFCH gadget by setting constants and checking environment
-		 *
-		 * @return {boolean} Whether or not all setup functions executed successfully
-		 */
+	 * Prepares the AFCH gadget by setting constants and checking environment
+	 * @return {bool} Whether or not all setup functions executed successfully
+	 */
 		setup: function () {
 			// Check requirements
 			if ( 'ajax' in $.support && !$.support.ajax ) {
 				AFCH.error = 'AFCH requires AJAX';
 				return false;
 			}
+			AFCH.consts.beta = true;
 
 			AFCH.api = new mw.Api();
 
@@ -64,39 +620,31 @@
 			AFCH.prefs = AFCH.preferences.prefStore;
 
 			// Add more constants -- don't overwrite those already set, though
-			AFCH.consts = $.extend( AFCH.consts, {
-				// If true, the script will NOT modify actual wiki content and
-				// will instead mock all such API requests (success assumed)
-				mockItUp: AFCH.consts.mockItUp || false,
-
-				// Full page name, "Wikipedia talk:Articles for creation/sandbox"
-				pagename: mw.config.get( 'wgPageName' ).replace( /_/g, ' ' ),
-
-				// Link to the current page, "/wiki/Wikipedia talk:Articles for creation/sandbox"
-				pagelink: mw.util.getUrl(),
-
-				// Used when status is disabled
-				nullstatus: { update: function () {
-					return;
-				} },
-
-				// Current user
-				user: mw.user.getName(),
-
-				// Edit summary ad
-				summaryAd: ' ([[WP:AFCH|AFCH]])',
-
-				// Require users to be on whitelist to use the script
-				// Testwiki users don't need to be on it
-				whitelistRequired: mw.config.get( 'wgDBname' ) !== 'testwiki',
-
-				// Name of the whitelist page for reviewers
-				whitelistTitle: 'Wikipedia:WikiProject Articles for creation/Participants'
-			}, AFCH.consts );
-
-			if ( window.afchSuppressDevEdits === false ) {
-				AFCH.consts.mockItUp = false;
-			}
+			AFCH.consts = $.extend(
+				{}, {
+					// If true, the script will NOT modify actual wiki content and
+					// will instead mock all such API requests (success assumed)
+					mockItUp: false,
+					// Full page name, "উইকিপিডিয়া আলোচনা:নিবন্ধ সৃষ্টিকরণ/খেলাঘর"
+					pagename: mw.config.get( 'wgPageName' ).replace( /_/g, ' ' ),
+					// Link to the current page, "/wiki/উইকিপিডিয়া আলোচনা:নিবন্ধ সৃষ্টিকরণ/খেলাঘর"
+					pagelink: mw.util.getUrl(),
+					// Used when status is disabled
+					nullstatus: {
+						update: function () {
+							return;
+						}
+					},
+					// Current user
+					user: mw.user.getName(),
+					// Edit summary ad
+					summaryAd: ' ([[WP:AFCH|AFCH]])',
+					// Require users to be on whitelist to use the script
+					whitelistRequired: true,
+					// Name of the whitelist page for reviewers
+					whitelistTitle: 'উইকিপিডিয়া:উইকিপ্রকল্প নিবন্ধ সৃষ্টিকরণ/অংশগ্রহণকারী'
+				},
+				AFCH.consts );
 
 			// Check whitelist if necessary, but don't delay loading of the
 			// script for users who ARE allowed; rather, just destroy the
@@ -109,123 +657,159 @@
 		},
 
 		/**
-		 * Check if the current user is allowed to use the helper script;
-		 * if not, display an error and destroy AFCH
-		 */
+	 * Check if the current user is allowed to use the helper script;
+	 * if not, display an error and destroy AFCH
+	 */
 		checkWhitelist: function () {
-			const user = AFCH.consts.user,
+			var user = AFCH.consts.user,
 				whitelist = new AFCH.Page( AFCH.consts.whitelistTitle );
-			whitelist.getText().done( ( text ) => {
-
+			whitelist.getText().done( function ( text ) {
 				// sanitizedUser is user, but escaped for use in the regex.
 				// Otherwise a user named ... would always be able to use
 				// the script, so long as there was a user whose name was
 				// three characters long on the list!
-				let $howToDisable,
-					sanitizedUser = user.replace( /[-[\]/{}()*+?.\\^$|]/g, '\\$&' ),
+				var $howToDisable,
+					sanitizedUser = user.replace( /[\-\[\]\/\{\}\(\)\*\+\?\.\\\^\$\|]/g, '\\$&' ),
 					userSysop = $.inArray( 'sysop', mw.config.get( 'wgUserGroups' ) ) > -1,
 					userNPP = $.inArray( 'patroller', mw.config.get( 'wgUserGroups' ) ) > -1,
+					userPCR = $.inArray( 'reviewer', mw.config.get( 'wgUserGroups' ) ) > -1,
 					userOnWhitelist = ( new RegExp( '\\|\\s*' + sanitizedUser + '\\s*}' ) ).test( text ),
-					userAllowed = userOnWhitelist || userSysop || userNPP;
+					userAllowed = userOnWhitelist || userSysop || userNPP || userPCR;
 
 				if ( !userAllowed ) {
-
-					// If we can detect that the gadget is currently enabled,
-					// offer a one-click "disable" link
+					// If we can detect that the gadget is currently enabled, offer a
+					// one-click "disable" link
 					if ( mw.user.options.get( 'gadget-afchelper' ) === '1' ) {
-						$howToDisable = $( '<span>' )
-							.append( 'If you wish to disable the helper script, ' )
-							.append( $( '<a>' )
-								.text( 'click here' )
-								.on( 'click', () => {
-									// Submit the API request to disable the gadget.
-									// Note: We don't use `AFCH.api` here, because AFCH has already
-									// been destroyed due to the user not being on the whitelist!
-									( new mw.Api() ).postWithEditToken( {
-										action: 'options',
-										change: 'gadget-afchelper=0'
-									} ).done( () => {
-										mw.notify( 'AFCH has been disabled successfully. If you wish to re-enable it in the ' +
-											'future, you can do so via your Preferences by checking "Yet Another AFC Helper Script".' );
-									} );
+						$howToDisable =
+				$( '<span>' )
+					.append( 'সহায়ক স্ক্রিপ্ট নিষ্ক্রিয় করতে,' )
+					.append( $( '<a>' )
+						.text( 'এখানে ক্লিক করুন' )
+						.click( function () {
+							// Submit the API request to disable the gadget.
+							// Note: We don't use `AFCH.api` here, because
+							// AFCH has already been destroyed due to the
+							// user not being on the whitelist!
+							( new mw.Api() )
+								.postWithToken( 'options', {
+									action: 'options',
+									change: 'gadget-afchelper=0'
 								} )
-							)
-							.append( '. ' );
+								.done( function ( data ) {
+									mw.notify( 'AFCHসফলভাবে নিষ্ক্রিয় করা হয়েছে'  );
+								} );
+						} ) )
+					.append( '. ' );
 
-					// Otherwise, AFCH is probably installed via common.js/skin.js:
-					// offer links for easy access.
+						// Otherwise, AFCH is probably installed via common.js/skin.js --
+						// offer links for easy access.
 					} else {
 						$howToDisable = $( '<span>' )
-							.append( 'If you wish to disable the helper script, you will need to manually ' +
-								'remove it from your ' )
-							.append( AFCH.makeLinkElementToPage( 'Special:MyPage/common.js', 'common.js' ) )
-							.append( ' or your ' )
-							.append( AFCH.makeLinkElementToPage( 'Special:MyPage/skin.js', 'skin.js' ) )
-							.append( 'page. ' );
+							.append(
+								'আপনি যদি সহায়ক স্ক্রিপ্ট স্বয়ংক্রিয়ভাবে নিষ্ক্রিয় করতে চান' +
+									'আপনার' )
+							.append( AFCH.makeLinkElementToPage(
+								'Special:MyPage/common.js', 'common.js' ) )
+							.append( 'বা' )
+							.append( AFCH.makeLinkElementToPage(
+								'Special:MyPage/skin.js', 'skin.js' ) )
+							.append( 'পাতা থেকে সরান' );
 					}
 
 					// Finally, make and push the notification, then explode AFCH
 					mw.notify(
 						$( '<div>' )
-							.append( 'AFCH could not be loaded because "' + user + '" is not listed on ' )
+							.append(
+								'AFCH লোড করা যায়নি，"' + user +
+					'"তালিকাভুক্ত নয়' )
 							.append( AFCH.makeLinkElementToPage( whitelist.rawTitle ) )
-							.append( '. You can request access to the AfC helper script there. ' )
+							.append( 
+								'সেখানে আপনি স্ক্রিপ্ট ব্যবহারের অনুমতির জন্য আবেদন করতে পারেন।' )
 							.append( $howToDisable )
-							.append( 'If you have any questions or concerns, please ' )
-							.append( AFCH.makeLinkElementToPage( 'WT:AFCH', 'get in touch' ) )
+							.append( 
+								'আপনার কোন প্রশ্ন বা উদ্বেগ থাকলে，দয়া করে' )
+							.append( AFCH.makeLinkElementToPage(
+								'WP:AFCH', 'সাহায্যের জন্য জিজ্ঞাসা করুন' ) )
 							.append( '!' ),
 						{
-							title: 'AFCH error: user not listed',
+							title: 
+								'AFCH ত্রুটি：ব্যবহারকারী অনুমোদিত তালিকায় নেই',
 							autoHide: false
-						}
-					);
+						} );
 					AFCH.destroy();
 				}
 			} );
 		},
 
 		/**
-		 * Loads the subscript and dependencies
-		 *
-		 * @param {string} type Which type of script to load: 'redirects' or 'ffu' or 'submissions'
-		 * @return {boolean}
-		 */
+	 * Loads the subscript and dependencies
+	 * @param {string} type Which type of script to load:
+	 *						'redirects' or 'ffu' or 'submissions'
+	 */
 		load: function ( type ) {
 			if ( !AFCH.setup() ) {
 				return false;
 			}
 
-			let promise = $.when();
-
 			if ( AFCH.consts.beta ) {
 				// Load minified css
-				mw.loader.load( AFCH.consts.scriptpath + '?action=raw&ctype=text/css&title=MediaWiki:Gadget-afch.css', 'text/css' );
-				promise = mw.loader.using( [
-					'jquery.chosen',
-					'jquery.spinner',
-					'jquery.ui',
+				mw.loader.load(
+					AFCH.consts.scriptpath +
+				'?action=raw&ctype=text/css&title=ব্যবহারকারী:Tanbiruzzaman/afch-master.css',
+					'text/css' );
+				// Load dependencies
+				mw.loader.load( [
+					// jquery resources
+					'jquery.chosen', 'jquery.spinner', 'jquery.ui',
 
-					'mediawiki.api',
-					'mediawiki.util',
-					'mediawiki.user'
+					// mediawiki.api
+					'mediawiki.api', 'mediawiki.api.titleblacklist',
+
+					// mediawiki plugins
+					'mediawiki.feedback'
 				] );
 			}
 
 			// And finally load the subscript
-			promise.then( () => {
-				$.getScript( AFCH.consts.baseurl + '/' + type + '.js' );
-			} );
+			$.getScript( AFCH.consts.baseurl + '/' + type + '.js' );
 
 			return true;
 		},
 
 		/**
-		 * Represents a page, mainly a wrapper for various actions
-		 *
-		 * @param {string} name
-		 */
+	 * Appends a feedback link to the given element
+	 * @param {string|jQuery} $element The jQuery element or selector to which the
+	 *	 link should be appended
+	 * @param {string} type (optional) The part of AFCH that feedback is being
+	 *	 given for, e.g. "files for upload"
+	 * @param {string} linkText (optional) Text to display in the link; by default
+	 *	 "Give feedback!"
+	 */
+		initFeedback: function ( $element, type, linkText ) {
+			var feedback = new mw.Feedback( {
+				title: new mw.Title( 'উইকিপিডিয়া আলোচনা:নিবন্ধ সৃষ্টিকরণ/সহায়ক স্ক্রিপ্ট' ),
+				bugsLink:
+			'https://bn.wikipedia.org/w/index.php?title=উইকিপিডিয়া আলোচনা:নিবন্ধ সৃষ্টিকরণ/সহায়ক স্ক্রিপ্ট&action=edit&section=new',
+				bugsListLink:
+			'https://bn.wikipedia.org/w/index.php?title=উইকিপিডিয়া আলোচনা:নিবন্ধ সৃষ্টিকরণ/সহায়ক স্ক্রিপ্ট'
+			} );
+			$( '<span>' )
+				.text( linkText || 'মতামত!' )
+				.addClass( 'feedback-link link' )
+				.click( function () {
+					feedback.launch( {
+						subject: '[' + AFCH.consts.version + '] ' +
+				( type ? 'Feedback about ' + type : 'AFCH feedback' )
+					} );
+				} )
+				.appendTo( $element );
+		},
+
+		/**
+	 * Represents a page, mainly a wrapper for various actions
+	 */
 		Page: function ( name ) {
-			const pg = this;
+			var pg = this;
 
 			this.title = new mw.Title( name );
 			this.rawTitle = this.title.getPrefixedText();
@@ -238,62 +822,61 @@
 			};
 
 			this.edit = function ( options ) {
-				const deferred = $.Deferred();
+				var deferred = $.Deferred();
 
-				AFCH.actions.editPage( this.rawTitle, options )
-					.done( ( data ) => {
-						deferred.resolve( data );
-					} );
-
-				return deferred;
-			};
-
-			/**
-			 * Makes an API request to get a variety of details about the current
-			 * revision of the page, which it then sets.
-			 *
-			 * @param {boolean} usecache if true, will resolve immediately if function has
-			 *                        run successfully before
-			 * @return {jQuery.Deferred} resolves when data set successfully
-			 */
-			this._revisionApiRequest = function ( usecache ) {
-				const deferred = $.Deferred();
-
-				if ( usecache && pg.hasAdditionalData ) {
-					return deferred.resolve();
-				}
-
-				AFCH.actions.getPageText( this.rawTitle, {
-					hide: true,
-					moreProps: 'timestamp|user|ids',
-					moreParameters: { rvgeneratexml: true }
-				} ).done( ( pagetext, data ) => {
-					// Set internal data
-					pg.pageText = pagetext;
-					pg.additionalData.lastModified = new Date( data.timestamp );
-					pg.additionalData.lastEditor = data.user;
-					pg.additionalData.rawTemplateModel = data.parsetree;
-					pg.additionalData.revId = data.revid;
-
-					pg.hasAdditionalData = true;
-
-					// Resolve; it's now safe to request this data
-					deferred.resolve();
+				AFCH.actions.editPage( this.rawTitle, options ).done( function ( data ) {
+					deferred.resolve( data );
 				} );
 
 				return deferred;
 			};
 
 			/**
-			 * Gets the page text
-			 *
-			 * @param {boolean} usecache use cache if possible
-			 * @return {string}
-			 */
-			this.getText = function ( usecache ) {
-				const deferred = $.Deferred();
+	 * Makes an API request to get a variety of details about the current
+	 * revision of the page, which it then sets.
+	 * @param {bool} usecache if true, will resolve immediately if function has
+	 *						run successfully before
+	 * @return {$.Deferred} resolves when data set successfully
+	 */
+			this._revisionApiRequest = function ( usecache ) {
+				var deferred = $.Deferred();
 
-				this._revisionApiRequest( usecache ).done( () => {
+				if ( usecache && pg.hasAdditionalData ) {
+					return deferred.resolve();
+				}
+
+				AFCH.actions
+					.getPageText( this.rawTitle, {
+						hide: true,
+						moreProps: 'timestamp|user|ids',
+						moreParameters: { rvgeneratexml: true }
+					} )
+					.done( function ( pagetext, data ) {
+						// Set internal data
+						pg.pageText = pagetext;
+						pg.additionalData.lastModified = new Date( data.timestamp );
+						pg.additionalData.lastEditor = data.user;
+						pg.additionalData.rawTemplateModel = data.parsetree;
+						pg.additionalData.revId = data.revid;
+
+						pg.hasAdditionalData = true;
+
+						// Resolve; it's now safe to request this data
+						deferred.resolve();
+					} );
+
+				return deferred;
+			};
+
+			/**
+	 * Gets the page text
+	 * @param {bool} usecache use cache if possible
+	 * @return {string}
+	 */
+			this.getText = function ( usecache ) {
+				var deferred = $.Deferred();
+
+				this._revisionApiRequest( usecache ).done( function () {
 					deferred.resolve( pg.pageText );
 				} );
 
@@ -301,42 +884,35 @@
 			};
 
 			/**
-			 * Gets templates on the page
-			 *
-			 * @return {Array} array of objects, each representing a template like
-			 *                       {
-			 *                           target: 'templateName',
-			 *                           params: { 1: 'foo', test: 'go to the {{bar}}' }
-			 *                       }
-			 */
+	 * Gets templates on the page
+	 * @return {array} array of objects, each representing a template like
+	 *						 {
+	 *							 target: 'templateName',
+	 *							 params: { 1: 'foo', test: 'go to the {{bar}}' }
+	 *						 }
+	 */
 			this.getTemplates = function () {
-				let $templateDom, templates = [],
-					deferred = $.Deferred();
+				var $templateDom, templates = [], deferred = $.Deferred();
 
-				this._revisionApiRequest( true ).done( () => {
-					$templateDom = $( $.parseXML( pg.additionalData.rawTemplateModel ) ).find( 'root' );
+				this._revisionApiRequest( true ).done( function () {
+					$templateDom =
+			$( $.parseXML( pg.additionalData.rawTemplateModel ) ).find( 'root' );
 
 					// We only want top level templates
 					$templateDom.children( 'template' ).each( function () {
-						const $el = $( this ),
-							data = {
-								target: $el.children( 'title' ).text(),
-								params: {}
-							};
+						var $el = $( this ),
+							data = { target: $el.children( 'title' ).text(), params: {} };
 
 						/**
-						 * Essentially, this function takes a template value DOM object, $v,
-						 * and removes all signs of XML-ishness. It does this by manipulating
-						 * the raw text and doing a few choice string replacements to change
-						 * the templates to use wikicode syntax instead. Rather than messing
-						 * with recursion and all that mess, /g is our friend...which is pefectly
-						 * satisfactory for our purposes.
-						 *
-						 * @param {jQuery} $v
-						 * @return {string}
-						 */
+			 * Essentially, this function takes a template value DOM object, $v,
+			 * and removes all signs of XML-ishness. It does this by manipulating
+			 * the raw text and doing a few choice string replacements to change
+			 * the templates to use wikicode syntax instead. Rather than messing
+			 * with recursion and all that mess, /g is our friend...which is
+			 * pefectly satisfactory for our purposes.
+			 */
 						function parseValue( $v ) {
-							let text = AFCH.jQueryToHtml( $v );
+							var text = AFCH.jQueryToHtml( $v );
 
 							// Convert templates to look more template-y
 							text = text.replace( /<template>/g, '{{' );
@@ -344,17 +920,22 @@
 							text = text.replace( /<part>/g, '|' );
 
 							// Expand embedded tags (like <nowiki>)
-							text = text.replace( new RegExp( '<ext><name>(.*?)<\\/name>(?:<attr>.*?<\\/attr>)*' +
-								'<inner>(.*?)<\\/inner><close>(.*?)<\\/close><\\/ext>', 'g' ), '&lt;$1&gt;$2$3' );
+							text = text.replace(
+								new RegExp(
+									'<ext><name>(.*?)<\\/name>(?:<attr>.*?<\\/attr>)*' +
+						'<inner>(.*?)<\\/inner><close>(.*?)<\\/close><\\/ext>',
+									'g' ),
+								'&lt;$1&gt;$2$3' );
 
-							// Now convert it back to text, removing all the rest of the XML tags
+							// Now convert it back to text, removing all the rest of the XML
+							// tags
 							return $( text ).text();
 						}
 
 						$el.children( 'part' ).each( function () {
-							const $part = $( this ),
-								$name = $part.children( 'name' ),
-								// Use the name if set, or fall back to index if implicitly numbered
+							var $part = $( this ), $name = $part.children( 'name' ),
+								// Use the name if set, or fall back to index if implicitly
+								// numbered
 								name = $.trim( $name.text() || $name.attr( 'index' ) ),
 								value = $.trim( parseValue( $part.children( 'value' ) ) );
 
@@ -371,35 +952,42 @@
 			};
 
 			/**
-			 * Gets the categories from the page
-			 *
-			 * @param {boolean} useApi If true, use the api to get categories, instead of parsing the page. This is
-			 *                      necessary if you need info about transcluded categories.
-			 * @param {boolean} includeCategoryLinks If true, will also include links to categories (e.g. [[:Category:Foo]]).
-			 *                                    Note that if useApi is true, includeCategoryLinks must be false.
-			 * @return {Array}
-			 */
+	 * Gets the categories from the page
+	 * @param {bool} useApi If true, use the api to get categories, instead of
+	 *	 parsing the page. This is
+	 *						necessary if you need info about transcluded
+	 * categories.
+	 * @param {bool} includeCategoryLinks If true, will also include links to
+	 *	 categories (e.g. [[:Category:Foo]]).
+	 *									Note that if useApi is true,
+	 * includeCategoryLinks must be false.
+	 * @return {array}
+	 */
 			this.getCategories = function ( useApi, includeCategoryLinks ) {
-				const deferred = $.Deferred(),
-					text = this.pageText;
+				var deferred = $.Deferred(), text = this.pageText;
 
 				if ( useApi ) {
-					AFCH.api.getCategories( this.title ).done( ( categories ) => {
+					AFCH.api.getCategories( this.title ).done( function ( categories ) {
 						// The api returns mw.Title objects, so we convert them to simple
 						// strings before resolving the deferred.
-						deferred.resolve( categories ? $.map( categories, ( cat ) => cat.getPrefixedText() ) : [] );
+						deferred.resolve( categories ? $.map( categories, function ( cat ) {
+							return cat.getPrefixedText();
+						} ) : [] );
 					} );
 					return deferred;
 				}
 
-				this._revisionApiRequest( true ).done( () => {
-					let catRegex = new RegExp( '\\[\\[' + ( includeCategoryLinks ? ':?' : '' ) + 'Category:(.*?)\\s*\\]\\]', 'gi' ),
-						match = catRegex.exec( text ),
-						categories = [];
+				this._revisionApiRequest( true ).done( function () {
+					var catRegex = new RegExp(
+							'\\[\\[' + ( includeCategoryLinks ? ':?' : '' ) +
+					'Category:(.*?)\\s*\\]\\]',
+							'gi' ),
+						match = catRegex.exec( text ), categories = [];
 
 					while ( match ) {
 						// Name of each category, with first letter capitalized
-						categories.push( match[ 1 ].charAt( 0 ).toUpperCase() + match[ 1 ].slice( 1 ) );
+						categories.push(
+							match[ 1 ].charAt( 0 ).toUpperCase() + match[ 1 ].substring( 1 ) );
 						match = catRegex.exec( text );
 					}
 
@@ -409,19 +997,10 @@
 				return deferred;
 			};
 
-			this.getShortDescription = function () {
-				return AFCH.api.get( {
-					action: 'query',
-					prop: 'description',
-					titles: this.rawTitle,
-					formatversion: 2
-				} ).then( ( json ) => json.query.pages[ 0 ].description || '' );
-			};
-
 			this.getLastModifiedDate = function () {
-				const deferred = $.Deferred();
+				var deferred = $.Deferred();
 
-				this._revisionApiRequest( true ).done( () => {
+				this._revisionApiRequest( true ).done( function () {
 					deferred.resolve( pg.additionalData.lastModified );
 				} );
 
@@ -429,9 +1008,9 @@
 			};
 
 			this.getLastEditor = function () {
-				const deferred = $.Deferred();
+				var deferred = $.Deferred();
 
-				this._revisionApiRequest( true ).done( () => {
+				this._revisionApiRequest( true ).done( function () {
 					deferred.resolve( pg.additionalData.lastEditor );
 				} );
 
@@ -439,7 +1018,7 @@
 			};
 
 			this.getCreator = function () {
-				let request, deferred = $.Deferred();
+				var request, deferred = $.Deferred();
 
 				if ( this.additionalData.creator ) {
 					deferred.resolve( this.additionalData.creator );
@@ -453,51 +1032,47 @@
 					rvdir: 'newer',
 					rvlimit: 1,
 					indexpageids: true,
-					titles: this.rawTitle
+					titles: this.rawTitle,
+					tool: 'AFCH'
 				};
 
 				// FIXME: Handle failure more gracefully
-				AFCH.api.get( request )
-					.done( ( data ) => {
-						let rev, id = data.query.pageids[ 0 ];
-						if ( id && data.query.pages[ id ] ) {
-							rev = data.query.pages[ id ].revisions[ 0 ];
-							pg.additionalData.creator = rev.user;
-							deferred.resolve( rev.user );
-						} else {
-							deferred.reject( data );
-						}
-					} );
-
-				return deferred;
-			};
-
-			this.exists = function () {
-				const deferred = $.Deferred();
-
-				AFCH.api.get( {
-					action: 'query',
-					prop: 'info',
-					titles: this.rawTitle
-				} ).done( ( data ) => {
-					// A nonexistent page will be indexed as '-1'
-					if ( data.query.pages.hasOwnProperty( '-1' ) ) {
-						deferred.resolve( false );
+				AFCH.api.get( request ).done( function ( data ) {
+					var rev, id = data.query.pageids[ 0 ];
+					if ( id && data.query.pages[ id ] ) {
+						rev = data.query.pages[ id ].revisions[ 0 ];
+						pg.additionalData.creator = rev.user;
+						deferred.resolve( rev.user );
 					} else {
-						deferred.resolve( true );
+						deferred.reject( data );
 					}
 				} );
 
 				return deferred;
 			};
 
+			this.exists = function () {
+				var deferred = $.Deferred();
+
+				AFCH.api.get( { action: 'query', prop: 'info', titles: this.rawTitle } )
+					.done( function ( data ) {
+						// A nonexistent page will be indexed as '-1'
+						if ( data.query.pages.hasOwnProperty( '-1' ) ) {
+							deferred.resolve( false );
+						} else {
+							deferred.resolve( true );
+						}
+					} );
+
+				return deferred;
+			};
+
 			/**
-			 * Gets the associated talk page
-			 *
-			 * @return {AFCH.Page}
-			 */
-			this.getTalkPage = function () {
-				let title, ns = this.title.getNamespaceId();
+	 * Gets the associated talk page
+	 * @return {AFCH.Page}
+	 */
+			this.getTalkPage = function ( textOnly ) {
+				var title, ns = this.title.getNamespaceId();
 
 				// Odd-numbered namespaces are already talk namespaces
 				if ( ns % 2 !== 0 ) {
@@ -511,26 +1086,26 @@
 		},
 
 		/**
-		 * Perform a specific action
-		 */
+	 * Perform a specific action
+	 */
 		actions: {
 			/**
-			 * Gets the full wikicode content of a page
-			 *
-			 * @param {string} pagename The page to get the contents of, namespace included
-			 * @param {Object} options Object with properties:
-			 *                          hide: {bool} set to true to hide the API request in the status log
-			 *                          moreProps: {string} additional properties to request, separated by `|`,
-			 *                          moreParameters: {object} additioanl query parameters
-			 * @return {jQuery.Deferred} Resolves with pagetext and full data available as parameters
-			 */
+	 * Gets the full wikicode content of a page
+	 * @param {string} pagename The page to get the contents of, namespace
+	 *	 included
+	 * @param {object} options Object with properties:
+	 *							hide: {bool} set to true to hide the API request
+	 * in the status log moreProps: {string} additional properties to request,
+	 * separated by `|`, moreParameters: {object} additioanl query parameters
+	 * @return {$.Deferred} Resolves with pagetext and full data available as
+	 *	 parameters
+	 */
 			getPageText: function ( pagename, options ) {
-				let status, request, rvprop = 'content',
-					deferred = $.Deferred();
+				var status, request, rvprop = 'content', deferred = $.Deferred();
 
 				if ( !options.hide ) {
-					status = new AFCH.status.Element( 'Getting $1...',
-						{ $1: AFCH.makeLinkElementToPage( pagename ) } );
+					status = new AFCH.status.Element(
+						'পান$1...', { $1: AFCH.makeLinkElementToPage( pagename ) } );
 				} else {
 					status = AFCH.consts.nullstatus;
 				}
@@ -545,14 +1120,15 @@
 					rvprop: rvprop,
 					format: 'json',
 					indexpageids: true,
-					titles: pagename
+					titles: pagename,
+					tool: 'AFCH'
 				};
 
 				$.extend( request, options.moreParameters || {} );
 
 				AFCH.api.get( request )
-					.done( ( data ) => {
-						let rev, id = data.query.pageids[ 0 ];
+					.done( function ( data ) {
+						var rev, id = data.query.pageids[ 0 ];
 						if ( id && data.query.pages ) {
 							// The page might not exist; resolve with an empty string
 							if ( id === '-1' ) {
@@ -562,171 +1138,150 @@
 
 							rev = data.query.pages[ id ].revisions[ 0 ];
 							deferred.resolve( rev[ '*' ], rev );
-							status.update( 'Got $1' );
+							status.update( 'প্রাপ্ত$1' );
 						} else {
 							deferred.reject( data );
 							// FIXME: get detailed error info from API result
-							status.update( 'Error getting $1: ' + JSON.stringify( data ) );
+							status.update( 'পান$1ব্যর্থ: ' + JSON.stringify( data ) );
 						}
 					} )
-					.fail( ( err ) => {
+					.fail( function ( err ) {
 						deferred.reject( err );
-						status.update( 'Error getting $1: ' + JSON.stringify( err ) );
+						status.update( '无法获取$1: ' + JSON.stringify( err ) );
 					} );
 
 				return deferred;
 			},
 
 			/**
-			 * Modifies a page's content
-			 *
-			 * @todo the property name "contents" is quite silly, because people used to the MediaWiki API are gonna write "text"
-			 * @param {string} pagename The page to be modified, namespace included
-			 * @param {Object} options Object with properties ('contents' is required, others are optional):
-			 *                          contents: {string} the text to add to/replace the page,
-			 *                          summary: {string} edit summary, will have the edit summary ad at the end,
-			 *                          createonly: {boolean} set to true to only edit the page if it doesn't exist,
-			 *                          mode: {string} 'appendtext' or 'prependtext'; default: (replace everything)
-			 *                          hide: {boolean} Set to true to supress logging in statusWindow
-			 *                          statusText: {string} message to show in status; default: "Editing"
-			 *                          followRedirects: {boolean} true to follow redirects, false to ignore redirects
-			 *                          watchlist: {string} 'nochange', 'preferences', 'unwatch', or 'watch'
-			 *                          subscribe: {boolean} when appending a talk page section, whether or not to subscribe to it
-			 * @return {jQuery.Deferred} Resolves if saved with all data
-			 */
+	 * Modifies a page's content
+	 * @param {string} pagename The page to be modified, namespace included
+	 * @param {object} options Object with properties:
+	 *							contents: {string} the text to add to/replace
+	 * the page, summary: {string} edit summary, will have the edit summary ad
+	 * at the end, createonly: {bool} set to true to only edit the page if it
+	 * doesn't exist, mode: {string} 'appendtext' or 'prependtext'; default:
+	 * (replace everything) hide: {bool} Set to true to supress logging in
+	 * statusWindow statusText: {string} message to show in status; default:
+	 * "Editing"
+	 * @return {jQuery.Deferred} Resolves if saved with all data
+	 */
 			editPage: function ( pagename, options ) {
-				let status, request, deferred = $.Deferred();
+				var status, request, deferred = $.Deferred();
 
 				if ( !options ) {
 					options = {};
 				}
 
-				// Default to false
-				if ( !options.followRedirects ) {
-					options.followRedirects = false;
-				}
-
 				if ( !options.hide ) {
-					status = new AFCH.status.Element( ( options.statusText || 'Editing' ) + ' $1...',
+					status = new AFCH.status.Element(
+						( options.statusText || 'সম্পাদনা' ) + '$1...',
 						{ $1: AFCH.makeLinkElementToPage( pagename ) } );
 				} else {
 					status = AFCH.consts.nullstatus;
 				}
 
-				if ( !options.subscribe ) {
-					request = {
-						action: 'edit',
-						title: pagename,
-						text: options.contents,
-						summary: options.summary + AFCH.consts.summaryAd,
-						redirect: options.followRedirects
-					};
-				} else {
-					// Because it is easier to do subscriptions with it, use the discussiontoolsedit API instead of the edit API
-					request = {
-						action: 'discussiontoolsedit',
-						paction: 'addtopic',
-						page: pagename,
-						sectiontitle: '',
-						wikitext: options.contents.trim(),
-						summary: options.summary + AFCH.consts.summaryAd,
-						autosubscribe: 'yes'
-					};
-				}
-
-				if ( pagename.indexOf( 'Draft:' ) === 0 ) {
-					request.nocreate = 'true';
-				}
-
-				if ( options.minor ) {
-					request.minor = 'true';
-				}
-
-				if ( [ 'nochange', 'preferences', 'unwatch', 'watch' ].includes( options.watchlist ) ) {
-					request.watchlist = options.watchlist;
-				} else if ( AFCH.prefs.noWatch ) {
-					request.watchlist = 'nochange';
-				}
+				request = {
+					action: 'edit',
+					text: options.contents,
+					title: pagename,
+					summary: options.summary + AFCH.consts.summaryAd
+				};
 
 				// Depending on mode, set appendtext=text or prependtext=text,
 				// which overrides the default text option
-				if ( !options.subscribe && options.mode ) {
+				if ( options.mode ) {
 					request[ options.mode ] = options.contents;
 				}
 
 				if ( AFCH.consts.mockItUp ) {
-					AFCH.log( 'Edit to "' + pagename + '"', request );
+					AFCH.log( request );
 					deferred.resolve();
 					return deferred;
 				}
 
-				AFCH.api.postWithEditToken( request )
-					.done( ( data ) => {
-						let $diffLink;
-						const api = options.subscribe ? 'discussiontoolsedit' : 'edit';
-						// The success string is capitalized by one API and not the other
-						const success = options.subscribe ? 'success' : 'Success';
+				AFCH.api.postWithToken( 'edit', request )
+					.done( function ( data ) {
+						var $diffLink;
 
-						if ( data && data[ api ] && data[ api ].result && data[ api ].result === success ) {
+						if ( data && data.edit && data.edit.result &&
+				data.edit.result === 'Success' ) {
 							deferred.resolve( data );
 
-							if ( data[ api ].hasOwnProperty( 'nochange' ) ) {
-								status.update( 'No changes made to $1' );
+							if ( data.edit.hasOwnProperty( 'nochange' ) ) {
+								status.update(
+									'অধিকার নেই$1কোনো পরিবর্তন করুন' );
 								return;
 							}
 
 							// Create a link to the diff of the edit
 							$diffLink = AFCH.makeLinkElementToPage(
-								'Special:Diff/' + data[ api ].newrevid, '(diff)'
-							).addClass( 'text-smaller' );
+								'Special:Diff/' + data.edit.oldrevid + '/' +
+										data.edit.newrevid,
+								'(পার্থক্য)' )
+								.addClass( 'text-smaller' );
 
-							status.update( 'Saved $1 ' + AFCH.jQueryToHtml( $diffLink ) );
+							status.update( 'সংরক্ষিত$1পরিবর্তন' + AFCH.jQueryToHtml( $diffLink ) );
 						} else {
 							deferred.reject( data );
 							// FIXME: get detailed error info from API result??
-							status.update( 'Error while saving $1: ' + JSON.stringify( data ) );
+							status.update(
+								'রাখুন$1পরিবর্তন ব্যর্থ হয়েছে：' +
+					JSON.stringify( data ) );
 						}
 					} )
-					.fail( ( err ) => {
+					.fail( function ( err ) {
 						deferred.reject( err );
-						status.update( 'Error while saving $1: ' + JSON.stringify( err ) );
+						status.update(
+							'রাখুন$1পরিবর্তন ব্যর্থ হয়েছে：' +
+				JSON.stringify( err ) );
 					} );
 
 				return deferred;
 			},
 
 			/**
-			 * Moves a page
-			 *
-			 * @param {string} oldTitle Page to move
-			 * @param {string} newTitle Move target
-			 * @param {string} reason Reason for moving; shown in move log
-			 * @param {Object} additionalParameters https://www.mediawiki.org/wiki/API:Move#Parameters
-			 * @param {boolean} hide Don't show the move in the status display
-			 * @return {jQuery.Deferred} Resolves with success/failure
-			 */
+	 * Deletes a page
+	 * @param	{string} pagename Page to delete
+	 * @param	{string} reason	 Reason for deletion; shown in deletion log
+	 * @return {$.Deferred} Resolves with success/failure
+	 */
+			deletePage: function ( pagename, reason ) {
+				// FIXME: implement
+				return false;
+			},
+
+			/**
+	 * Moves a page
+	 * @param {string} oldTitle Page to move
+	 * @param {string} newTitle Move target
+	 * @param {string} reason Reason for moving; shown in move log
+	 * @param {object} additionalParameters
+	 *	 https://www.mediawiki.org/wiki/API:Move#Parameters
+	 * @param {bool} hide Don't show the move in the status display
+	 * @return {$.Deferred} Resolves with success/failure
+	 */
 			movePage: function ( oldTitle, newTitle, reason, additionalParameters, hide ) {
-				let status, request, deferred = $.Deferred();
+				var status, request, deferred = $.Deferred();
 
 				if ( !hide ) {
-					status = new AFCH.status.Element( 'Moving $1 to $2...', {
-						$1: AFCH.makeLinkElementToPage( oldTitle ),
-						$2: AFCH.makeLinkElementToPage( newTitle )
-					} );
+					status = new AFCH.status.Element(
+						'স্থানান্তর$1হচ্ছে$2...', {
+							$1: AFCH.makeLinkElementToPage( oldTitle ),
+							$2: AFCH.makeLinkElementToPage( newTitle )
+						} );
 				} else {
 					status = AFCH.consts.nullstatus;
 				}
 
-				request = $.extend( {
-					action: 'move',
-					from: oldTitle,
-					to: newTitle,
-					reason: reason + AFCH.consts.summaryAd
-				}, additionalParameters );
-
-				if ( AFCH.prefs.noWatch ) {
-					request.watchlist = 'nochange';
-				}
+				request = $.extend(
+					{
+						action: 'move',
+						from: oldTitle,
+						to: newTitle,
+						reason: reason + AFCH.consts.summaryAd
+					},
+					additionalParameters );
 
 				if ( AFCH.consts.mockItUp ) {
 					AFCH.log( request );
@@ -734,19 +1289,24 @@
 					return deferred;
 				}
 
-				AFCH.api.postWithEditToken( request ) // Move token === edit token
-					.done( ( data ) => {
+				AFCH.api
+					.postWithToken( 'edit', request ) // Move token === edit token
+					.done( function ( data ) {
 						if ( data && data.move ) {
-							status.update( 'Moved $1 to $2' );
+							status.update( 'স্থানান্তর$1হচ্ছে$2' );
 							deferred.resolve( data.move );
 						} else {
 							// FIXME: get detailed error info from API result??
-							status.update( 'Error moving $1 to $2: ' + JSON.stringify( data.error ) );
+							status.update(
+								'স্থানান্তর$1হচ্ছে$2ব্যর্থ：' +
+					JSON.stringify( data.error ) );
 							deferred.reject( data.error );
 						}
 					} )
-					.fail( ( err ) => {
-						status.update( 'Error moving $1 to $2: ' + JSON.stringify( err ) );
+					.fail( function ( err ) {
+						status.update(
+							'স্থানান্তর$1হচ্ছে$2ব্যর্থ：' +
+				JSON.stringify( err ) );
 						deferred.reject( err );
 					} );
 
@@ -754,61 +1314,97 @@
 			},
 
 			/**
-			 * Notifies a user. Follows redirects and appends a message
-			 * to the bottom of the user's talk page.
-			 *
-			 * @param {string} user
-			 * @param {Object} options object with properties
-			 *                   - message: {string}
-			 *                   - summary: {string} edit summary
-			 *                   - hide: {bool}, default false
-			 * @return {jQuery.Deferred} Resolves with success/failure
-			 */
+	 * Notifies a user. Follows redirects and appends a message
+	 * to the bottom of the user's talk page.
+	 * @param	{string} user
+	 * @param	{object} data object with properties
+	 *					 - message: {string}
+	 *					 - summary: {string}
+	 *					 - hide: {bool}, default false
+	 * @return {$.Deferred} Resolves with success/failure
+	 */
 			notifyUser: function ( user, options ) {
-				const deferred = $.Deferred(),
-					userTalkPage = new AFCH.Page( new mw.Title( user, 3 ).getPrefixedText() ); // 3 = user talk namespace
-
-				userTalkPage.exists().done( ( exists ) => {
-					userTalkPage.edit( {
-						contents: ( exists ? '' : '{{Talk header}}' ) + '\n\n' + options.message,
-						summary: options.summary || 'Notifying user',
-						mode: 'appendtext',
-						statusText: 'Notifying',
-						hide: options.hide,
-						followRedirects: true,
-						subscribe: AFCH.prefs.autoSubscribe
+				var deferred = $.Deferred(),
+					userTalkPage =
+				new AFCH.Page( new mw.Title( user, 3 )
+					.getPrefixedText() ); // 3 = user talk namespace
+				talkPageName = 'User talk:' + user;
+				AFCH.api.get( { action: 'query', prop: 'info', titles: talkPageName } )
+					.done( function ( data ) {
+						var pages = data.query.pages;
+						var pageId = Object.keys( pages )[ 0 ];
+						var cm = pages[ pageId ].contentmodel;
+						if ( cm == 'flow-board' ) {
+							AFCH.api.postWithToken( 'csrf', {
+								action: 'flow',
+								page: talkPageName,
+								submodule: 'new-topic',
+								nttopic: options.summary,
+								ntcontent: options.message,
+								ntformat: 'wikitext'
+							} );
+							var status = new AFCH.status.Element(
+								( 'একটি কাঠামোগত আলোচনা পাতা চেষ্টা করুন' ) +
+						'$1' +
+						'সম্পাদনা করেছেন，চেক করুন' +
+						'$2 $3',
+								{
+									$1: AFCH.makeLinkElementToPage( talkPageName ),
+									$2: AFCH.makeLinkElementToPage(
+										talkPageName, 'সম্পাদনা' ),
+									$3: AFCH.makeLinkElementToPage(
+										'WP:AFCH', '(ত্রুটি রিপোর্টিং)' )
+								} );
+						} else if ( cm == 'wikitext' ) {
+							userTalkPage.exists().done( function ( exists ) {
+								userTalkPage.edit( {
+									contents: ( exists ? '' : '{{Talk header}}' ) + '\n\n' +
+						options.message,
+									summary: options.summary || 'ব্যবহারকারীকে জানান',
+									mode: 'appendtext',
+									statusText: 'জানান',
+									hide: options.hide
+								} );
+							} );
+						} else {
+							deferred.rejected();
+						}
+						deferred.resolved();
 					} )
-						.done( () => {
-							deferred.resolve();
-						} )
-						.fail( () => {
-							deferred.reject();
-						} );
-				} );
-
+					.fail( function ( data ) {
+						deferred.rejected();
+					} );
 				return deferred;
 			},
 
 			/**
-			 * Logs a CSD nomination
-			 *
-			 * @param {Object} options
-			 *                  - title {string}
-			 *                  - reason {string}
-			 *                  - usersNotified {array} optional
-			 * @return {jQuery.Deferred|void} resolves false if the page did not exist, otherwise resolves/rejects with data from the edit
-			 */
+	 * Logs a CSD nomination
+	 * @param {object} options
+	 *					- title {string}
+	 *					- reason {string}
+	 *					- usersNotified {array} optional
+	 * @return {$.Deferred} resolves false if the page did not exist, otherwise
+	 *						resolves/rejects with data from the edit
+	 */
 			logCSD: function ( options ) {
-				const deferred = $.Deferred(),
-					logPage = new AFCH.Page( 'User:' + mw.config.get( 'wgUserName' ) + '/' +
-						( window.Twinkle && window.Twinkle.getPref( 'speedyLogPageName' ) || 'CSD log' ) );
+				var deferred = $.Deferred(),
+					logPage = new AFCH.Page(
+						'User:' + mw.config.get( 'wgUserName' ) + '/' +
+				( window.Twinkle && window.Twinkle.getPref( 'speedyLogPageName' ) ||
+				'দ্রুত অপসারণ লগ' ) );
 
 				// Abort if user disabled in preferences
 				if ( !AFCH.prefs.logCsd ) {
 					return;
 				}
 
-				logPage.getText().done( ( logText ) => {
+				logPage.getText().done( function ( logText ) {
+					var status, date = new Date(),
+						headerRe = new RegExp(
+							'^==+\\s*' + date.getUTCMonthName() + '\\s+' +
+							date.getUTCFullYear() + '\\s*==+',
+							'm' ),
+						appendText = '';
 
 					// Don't edit if the page has doesn't exist or has no text
 					if ( !logText ) {
@@ -816,116 +1412,63 @@
 						return;
 					}
 
-					let appendText = AFCH.actions.addLogHeaderIfNeeded( logText );
+					// Add header for new month if necessary
+					if ( !headerRe.test( logText ) ) {
+						appendText += '\n\n=== ' + date.getUTCMonthName() + ' ' +
+				date.getUTCFullYear() + ' ===';
+					}
 
 					appendText += '\n# [[:' + options.title + ']]: ' + options.reason;
 
 					if ( options.usersNotified && options.usersNotified.length ) {
-						appendText += '; notified {{user|1=' + options.usersNotified.shift() + '}}';
+						appendText +=
+				'; জানান{{user|1=' + options.usersNotified.shift() + '}}';
 
-						$.each( options.usersNotified, ( _, user ) => {
+						$.each( options.usersNotified, function ( _, user ) {
 							appendText += ', {{user|1=' + user + '}}';
 						} );
 					}
 
-					appendText += ' ~~~~~\n';
+					appendText += ' ~~' +
+			'~~' +
+			'~\n';
 
-					logPage.edit( {
-						contents: appendText,
-						mode: 'appendtext',
-						summary: 'Logging speedy deletion nomination of [[' + options.title + ']]',
-						statusText: 'Logging speedy deletion nomination to'
-					} ).done( ( data ) => {
-						deferred.resolve( data );
-					} ).fail( ( data ) => {
-						deferred.reject( data );
-					} );
-				} );
-
-				return deferred;
-			},
-
-			logAfc: function ( options ) {
-				const deferred = $.Deferred(),
-					logPage = new AFCH.Page( 'User:' + mw.config.get( 'wgUserName' ) + '/AfC log' );
-
-				// Abort if user disabled in preferences
-				if ( !AFCH.prefs.logAfc ) {
-					return;
-				}
-
-				logPage.getText().done( ( logText ) => {
-					// Build log message
-					const header = AFCH.actions.addLogHeaderIfNeeded( logText );
-					const action = '\n# ' + options.actionType.charAt( 0 ).toUpperCase() + options.actionType.slice( 1 ) +
-										( options.actionType === 'decline' ? '' : 'e' ) + 'd';
-					const title = ' [[:' + options.title + ']]';
-
-					let declineReason = '';
-					if ( options.actionType === 'decline' ) {
-						// Custom is stored as 'reason' (because of template weirdness?), convert if necessary
-						options.declineReason = ( options.declineReason === 'reason' ) ? 'custom' : options.declineReason;
-						options.declineReason2 = ( options.declineReason2 === 'reason' ) ? 'custom' : options.declineReason2;
-
-						declineReason = ' (' + options.declineReason + ( options.declineReason2 ? ' & ' + options.declineReason2 : '' ) + ')';
-					}
-
-					const byUser = ' by [[User:' + options.submitter + '|]]';
-					const sig = ' ~~~~~\n';
-
-					// Make log edit
-					logPage.edit( {
-						contents: header + action + title + declineReason + byUser + sig,
-						mode: 'appendtext',
-						summary: 'Logging ' + options.actionType + ' of [[' + options.title + ']]',
-						statusText: 'Logging ' + options.actionType + ' to'
-					} ).done( ( data ) => {
-						deferred.resolve( data );
-					} ).fail( ( data ) => {
-						deferred.reject( data );
-					} );
+					logPage
+						.edit( {
+							contents: appendText,
+							mode: 'appendtext',
+							summary: 'রেকর্ড জোড়া[[' + options.title +
+					']]দ্রুত অপসারণ প্রস্তাবনা',
+							statusText: 'দ্রুত অপসারণ প্রস্তাবনা রেকর্ড'
+						} )
+						.done( function ( data ) {
+							deferred.resolve( data );
+						} )
+						.fail( function ( data ) {
+							deferred.reject( data );
+						} );
 				} );
 
 				return deferred;
 			},
 
 			/**
-			 * Takes text of the log page; returns a string with the header for the current month
-			 * if that header doesn't already exist
-			 *
-			 * @param {string} logText Text of user's AfC log
-			 * @return {string} headerText
-			 */
-			addLogHeaderIfNeeded: function ( logText ) {
-				let date = new Date(),
-					monthNames = [ 'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December' ],
-					headerRe = new RegExp( '^==+\\s*' + monthNames[ date.getUTCMonth() ] + '\\s+' + date.getUTCFullYear() + '\\s*==+', 'm' ),
-					headerText = '';
-
-				if ( !headerRe.test( logText ) ) {
-					headerText += '\n\n=== ' + monthNames[ date.getUTCMonth() ] + ' ' + date.getUTCFullYear() + ' ===';
-				}
-
-				return headerText;
-			},
-
-			/**
-			 * If user is allowed, marks a given recentchanges ID as patrolled
-			 *
-			 * @param {string|number} rcid rcid to mark as patrolled
-			 * @param {string} title Prettier title to display. If not specified, falls back to just
-			 *                       displaying the rcid instead.
-			 * @return {jQuery.Deferred}
-			 */
+	 * If user is allowed, marks a given recentchanges ID as patrolled
+	 * @param {string|number} rcid rcid to mark as patrolled
+	 * @param {string} title Prettier title to display. If not specified, falls
+	 *	 back to just
+	 *						 displaying the rcid instead.
+	 * @return {$.Deferred}
+	 */
 			patrolRcid: function ( rcid, title ) {
-				let request, deferred = $.Deferred(),
-					status = new AFCH.status.Element( 'Patrolling $1...',
-						{ $1: AFCH.makeLinkElementToPage( title ) || 'page with id #' + rcid } );
+				var request,
+					deferred = $.Deferred(),
+					status = new AFCH.status.Element(
+						'আদেশে$1পরীক্ষিত বলে চিহ্নিত করুন...', {
+							$1: AFCH.makeLinkElementToPage( title ) || 'page with id #' + rcid
+						} );
 
-				request = {
-					action: 'patrol',
-					rcid: rcid
-				};
+				request = { action: 'patrol', rcid: rcid };
 
 				if ( AFCH.consts.mockItUp ) {
 					AFCH.log( request );
@@ -933,39 +1476,44 @@
 					return deferred;
 				}
 
-				AFCH.api.postWithToken( 'patrol', request ).done( ( data ) => {
-					if ( data.patrol && data.patrol.rcid ) {
-						status.update( 'Patrolled $1' );
-						deferred.resolve( data );
-					} else {
-						status.update( 'Failed to patrol $1: ' + JSON.stringify( data.patrol ) );
+				AFCH.api.postWithToken( 'patrol', request )
+					.done( function ( data ) {
+						if ( data.patrol && data.patrol.rcid ) {
+							status.update( 'পরিক্ষীত$1' );
+							deferred.resolve( data );
+						} else {
+							status.update(
+								'হবে$1পরীক্ষিত বলে চিহ্নিত ব্যর্থ：' +
+					JSON.stringify( data.patrol ) );
+							deferred.reject( data );
+						}
+					} )
+					.fail( function ( data ) {
+						status.update(
+							'হবে$1পরীক্ষিত বলে চিহ্নিত ব্যর্থ：' +
+				JSON.stringify( data ) );
 						deferred.reject( data );
-					}
-				} ).fail( ( data ) => {
-					status.update( 'Failed to patrol $1: ' + JSON.stringify( data ) );
-					deferred.reject( data );
-				} );
+					} );
 
 				return deferred;
 			}
 		},
 
 		/**
-		 * Series of functions for logging statuses and whatnot
-		 */
+	 * Series of functions for logging statuses and whatnot
+	 */
 		status: {
 
 			/**
-			 * Represents the status container, created ub init()
-			 */
+	 * Represents the status container, created ub init()
+	 */
 			container: false,
 
 			/**
-			 * Creates the status container
-			 *
-			 * @param {string|jQuery} location String/jQuery selector for where the
-			 *                             status container should be prepended
-			 */
+	 * Creates the status container
+	 * @param	{selector} location String/jQuery selector for where the
+	 *							 status container should be prepended
+	 */
 			init: function ( location ) {
 				AFCH.status.container = $( '<div>' )
 					.attr( 'id', 'afchStatus' )
@@ -974,20 +1522,20 @@
 			},
 
 			/**
-			 * Represents an element in the status container
-			 *
-			 * @param {string} initialText Initial text of the element
-			 * @param {Object} substitutions key-value pairs of strings that should be replaced by something
-			 *                               else. For example, { '$2': mw.user.getUser() }. If not redefined, $1
-			 *                               will be equal to the current page name.
-			 */
+	 * Represents an element in the status container
+	 * @param	{string} initialText Initial text of the element
+	 * @param {object} substitutions key-value pairs of strings that should be
+	 *	 replaced by something
+	 *								 else. For example, { '$2':
+	 * mw.user.getUser() }. If not redefined, $1 will be equal to the current
+	 * page name.
+	 */
 			Element: function ( initialText, substitutions ) {
 				/**
-				 * Replace the status element with new html content
-				 *
-				 * @param {jQuery|string} html Content of the element
-				 *                              Can use $1 to represent the page name
-				 */
+		 * Replace the status element with new html content
+		 * @param	{jQuery|string} html Content of the element
+		 *								Can use $1 to represent the page name
+		 */
 				this.update = function ( html ) {
 					// Convert to HTML first if necessary
 					if ( html.jquery ) {
@@ -995,7 +1543,7 @@
 					}
 
 					// First run the substutions
-					$.each( this.substitutions, ( key, value ) => {
+					$.each( this.substitutions, function ( key, value ) {
 						// If we are passed a jQuery object, convert it to regular HTML first
 						if ( value.jquery ) {
 							value = AFCH.jQueryToHtml( value );
@@ -1008,8 +1556,8 @@
 				};
 
 				/**
-				 * Remove the element from the status container
-				 */
+		 * Remove the element from the status container
+		 */
 				this.remove = function () {
 					this.update( '' );
 				};
@@ -1027,47 +1575,38 @@
 
 				this.substitutions = substitutions;
 
-				this.element = $( '<li>' )
-					.appendTo( AFCH.status.container );
+				this.element = $( '<li>' ).appendTo( AFCH.status.container );
 
 				this.update( initialText );
 			}
 		},
 
-		/**
-		 * A simple framework for getting/setting interface messages.
-		 * Not every message necessarily needs to go through here. But
-		 * it's nice to separate long messages from the code itself.
-		 *
-		 * @type {Object}
-		 */
 		msg: {
 			/**
-			 * AFCH messages loaded by default for all subscripts.
-			 *
-			 * @type {Object}
-			 */
+	 * AFCH messages loaded by default for all subscripts.
+	 * @type {Object}
+	 */
 			store: {},
 
 			/**
-			 * Retrieve the text of a message, or a placeholder if the
-			 * message is not set
-			 *
-			 * @param {string} key Message key
-			 * @param {Object} substitutions replacements to make
-			 * @return {string} Message value
-			 */
+	 * Retrieve the text of a message, or a placeholder if the
+	 * message is not set
+	 * @param {string} key Message key
+	 * @param {object} substitutions replacements to make
+	 * @return {string} Message value
+	 */
 			get: function ( key, substitutions ) {
-				let text = AFCH.msg.store[ key ] || '<' + key + '>';
+				var text = AFCH.msg.store[ key ] || '<' + key + '>';
 
 				// Perform substitutions if necessary
 				if ( substitutions ) {
-					$.each( substitutions, ( original, replacement ) => {
+					$.each( substitutions, function ( original, replacement ) {
 						text = text.replace(
-							// Escape the original substitution key, then make it a global regex
-							new RegExp( original.replace( /[-/\\^$*+?.()|[\]{}]/g, '\\$&' ), 'g' ),
-							replacement
-						);
+							// Escape the original substitution key, then make it a global
+							// regex
+							new RegExp(
+								original.replace( /[-\/\\^$*+?.()|[\]{}]/g, '\\$&' ), 'g' ),
+							replacement );
 					} );
 				}
 
@@ -1075,11 +1614,10 @@
 			},
 
 			/**
-			 * Set a new message or messages
-			 *
-			 * @param {string | Object} key
-			 * @param {string} value if key is a string, value
-			 */
+	 * Set a new message or messages
+	 * @param {string|object} key
+	 * @param {string} value if key is a string, value
+	 */
 			set: function ( key, value ) {
 				if ( typeof key === 'object' ) {
 					$.extend( AFCH.msg.store, key );
@@ -1090,48 +1628,46 @@
 		},
 
 		/**
-		 * Store persistent data for the user. Data is stored over
-		 * several layers: window-locally, in a variable; broswer-locally,
-		 * via localStorage, and finally not-so-locally-at-all, via
-		 * mw.user.options.
-		 *
-		 * == REDUNDANCY, EXPLAINED ==
-		 * The reason for this redundancy is because of an obnoxious
-		 * little thing called caching. Ideally the script would simply
-		 * use mw.user.options, but *apparently* MediaWiki doesn't always
-		 * provide the most updated mw.user.options on page load -- in some
-		 * instances, it will provide an stale, cached version instead.
-		 * This is most certainly a MediaWiki bug, but in the meantime, we
-		 * circumvent it by adding numerous layers of redundancy to the whole
-		 * getup. In this manner, hopefully by the time we have to rely on
-		 * mw.user.options, the cache will have been invalidated and the world
-		 * won't explode. *sighs repeatedly* --Theopolisme, 26 May 2014
-		 *
-		 * @type {Object}
-		 */
+	 * Store persistent data for the user. Data is stored over
+	 * several layers: window-locally, in a variable; broswer-locally,
+	 * via localStorage, and finally not-so-locally-at-all, via
+	 * mw.user.options.
+	 *
+	 * == REDUNDANCY, EXPLAINED ==
+	 * The reason for this redundancy is because of an obnoxious
+	 * little thing called caching. Ideally the script would simply
+	 * use mw.user.options, but *apparently* MediaWiki doesn't always
+	 * provide the most updated mw.user.options on page load -- in some
+	 * instances, it will provide an stale, cached version instead.
+	 * This is most certainly a MediaWiki bug, but in the meantime, we
+	 * circumvent it by adding numerous layers of redundancy to the whole
+	 * getup. In this manner, hopefully by the time we have to rely on
+	 * mw.user.options, the cache will have been invalidated and the world
+	 * won't explode. *sighs repeatedly* --Theopolisme, 26 May 2014
+	 *
+	 * @type {Object}
+	 */
 		userData: {
 			/** @internal */
 			_prefix: 'userjs-afch-',
 
 			/**
-			 * @internal
-			 * This is used to cache the updated values of recently set
-			 * (through AFCH.userData.set) options, since mw.user.options.get
-			 * won't include items set after the page was first loaded.
-			 * @type {Object}
-			 */
+	 * @internal
+	 * This is used to cache the updated values of recently set
+	 * (through AFCH.userData.set) options, since mw.user.options.get
+	 * won't include items set after the page was first loaded.
+	 * @type {Object}
+	 */
 			_optsCache: {},
 
 			/**
-			 * Set a value in the data store
-			 *
-			 * @param {string} key
-			 * @param {Mixed} value
-			 * @return {jQuery.Deferred} success
-			 */
+	 * Set a value in the data store
+	 * @param {string} key
+	 * @param {mixed} value
+	 * @return {$.Deferred} success
+	 */
 			set: function ( key, value ) {
-				const deferred = $.Deferred(),
-					fullKey = AFCH.userData._prefix + key,
+				var deferred = $.Deferred(), fullKey = AFCH.userData._prefix + key,
 					fullValue = JSON.stringify( value );
 
 				// Update cache so AFCH.userData.get() will have updated
@@ -1145,26 +1681,25 @@
 					window.localStorage[ fullKey ] = fullValue;
 				}
 
-				AFCH.api.postWithEditToken( {
-					action: 'options',
-					optionname: fullKey,
-					optionvalue: fullValue
-				} ).done( ( data ) => {
-					deferred.resolve( data );
-				} );
+				AFCH.api
+					.postWithToken(
+						'options',
+						{ action: 'options', optionname: fullKey, optionvalue: fullValue } )
+					.done( function ( data ) {
+						deferred.resolve( data );
+					} );
 
 				return deferred;
 			},
 
 			/**
-			 * Gets a value from the data store
-			 *
-			 * @param {string} key
-			 * @param {Mixed} fallback fallback if option not present
-			 * @return {Mixed} value
-			 */
+	 * Gets a value from the data store
+	 * @param {string} key
+	 * @param {mixed} fallback fallback if option not present
+	 * @return {mixed} value
+	 */
 			get: function ( key, fallback ) {
-				let value,
+				var value,
 					fullKey = AFCH.userData._prefix + key,
 					cachedWindow = AFCH.userData._optsCache[ fullKey ],
 					cachedLocal = window.localStorage && window.localStorage[ fullKey ];
@@ -1177,56 +1712,51 @@
 				}
 
 				// Otherwise just use mw.user.options (with fallback).
-				return JSON.parse( mw.user.options.get( fullKey, JSON.stringify( fallback || false ) ) );
+				return JSON.parse(
+					mw.user.options.get( fullKey, JSON.stringify( fallback || false ) ) );
 			}
 		},
 
 		/**
-		 * AFCH.Preferences is a mechanism for accessing and altering user
-		 * preferences in regards to the script.
-		 *
-		 * Preferences are edited by the user via a jquery.ui.dialog and are
-		 * saved and persist for the user using AFCH.userData.
-		 *
-		 * Typical usage:
-		 *  AFCH.preferences = new AFCH.Preferences();
-		 *  AFCH.preferences.initLink( $( '.put-prefs-link-here' ) );
-		 *
-		 * @type {Object}
-		 */
+	 * AFCH.Preferences is a mechanism for accessing and altering user
+	 * preferences in regards to the script.
+	 *
+	 * Preferences are edited by the user via a jquery.ui dialog and are
+	 * saved and persist for the user using AFCH.userData.
+	 *
+	 * Typical usage:
+	 *	AFCH.preferences = new AFCH.Preferences();
+	 *	AFCH.preferences.initLink( $( '.put-prefs-link-here' ) );
+	 *
+	 * @type {object}
+	 */
 		Preferences: function () {
-			const prefs = this;
+			var prefs = this;
 
 			/**
-			 * Default values for user preferences; details for each preference can be
-			 * found inline in `templates/tpl-preferences.html`.
-			 *
-			 * @type {Object}
-			 */
+	 * Default values for user preferences; details for each preference can be
+	 * found inline in `templates/tpl-preferences.html`.
+	 * @type {object}
+	 */
 			this.prefDefaults = {
 				autoOpen: false,
 				logCsd: true,
-				launchLinkPosition: 'p-cactions',
-				logAfc: false,
-				noWatch: false,
-				autoSubscribe: false
+				launchLinkPosition: 'p-cactions'
 			};
 
 			/**
-			 * Current user's preferences
-			 *
-			 * @type {Object}
-			 */
-			this.prefStore = $.extend( {}, this.prefDefaults, AFCH.userData.get( 'preferences', {} ) );
+	 * Current user's preferences
+	 * @type {object}
+	 */
+			this.prefStore =
+		$.extend( {}, this.prefDefaults, AFCH.userData.get( 'preferences', {} ) );
 
 			/**
-			 * Initializes the preferences modification dialog
-			 */
+	 * Initializes the preferences modification dialog
+	 */
 			this.initDialog = function () {
-				const $spinner = $.createSpinner( {
-					size: 'large',
-					type: 'block'
-				} ).css( 'padding', '20px' );
+				var $spinner = $.createSpinner( { size: 'large', type: 'block' } )
+					.css( 'padding', '20px' );
 
 				if ( !this.$dialog ) {
 					// Initialize the $dialog div
@@ -1240,17 +1770,17 @@
 				this.$dialog.dialog( {
 					width: 500,
 					autoOpen: false,
-					title: 'AFCH Preferences',
+					title: 'AFCH পছন্দসমূহ',
 					modal: true,
 					buttons: [
 						{
-							text: 'Cancel',
+							text: 'বাতিল করুন',
 							click: function () {
 								prefs.$dialog.dialog( 'close' );
 							}
 						},
 						{
-							text: 'Save preferences',
+							text: 'সেটিংস সংরক্ষণ করুন',
 							click: function () {
 								prefs.save();
 								prefs.$dialog.empty().append( $spinner );
@@ -1268,7 +1798,7 @@
 						type: 'GET',
 						url: AFCH.consts.baseurl + '/tpl-preferences.js',
 						dataType: 'text'
-					} ).done( ( data ) => {
+					} ).done( function ( data ) {
 						prefs.views = new AFCH.Views( data );
 						prefs.renderMain();
 					} );
@@ -1276,62 +1806,63 @@
 			};
 
 			/**
-			 * Renders the main preferences menu in the $dialog
-			 */
+	 * Renders the main preferences menu in the $dialog
+	 */
 			this.renderMain = function () {
 				if ( !( this.views && this.$dialog ) ) {
 					return;
 				}
 
-				// Empty the dialog and render the preferences view. Provides the values of all
-				// of the preferences as variables, as well as an additional few used in other locations.
+				// Empty the dialog and render the preferences view. Provides the values
+				// of all of the preferences as variables, as well as an additional few
+				// used in other locations.
 				this.$dialog.empty().append(
 					this.views.renderView( 'preferences', $.extend( {}, this.prefStore, {
+						version: AFCH.consts.version,
+						versionName: AFCH.consts.versionName,
 						userAgent: window.navigator.userAgent
-					} ) )
-				);
+					} ) ) );
 
 				// Manually handle selecting the desired value in <select> menus
 				this.$dialog.find( 'select' ).each( function () {
-					const $select = $( this ),
-						id = $select.attr( 'id' ),
+					var $select = $( this ), id = $select.attr( 'id' ),
 						value = prefs.prefStore[ id ];
 					$select.find( 'option[value="' + value + '"]' ).prop( 'selected', true );
 				} );
 			};
 
 			/**
-			 * Updates prefs based on data in the dialog which
-			 * is created in AFCH.preferences.init().
-			 */
+	 * Updates prefs based on data in the dialog which
+	 * is created in AFCH.preferences.init().
+	 */
 			this.save = function () {
 				// First, hide the buttons so the user won't start multiple actions
 				this.$dialog.dialog( { buttons: [] } );
 
 				// Now update the prefStore
-				$.extend( this.prefStore, AFCH.getFormValues( this.$dialog.find( '.afch-input' ) ) );
+				$.extend(
+					this.prefStore, AFCH.getFormValues( this.$dialog.find( '.afch-input' ) ) );
 
 				// Set the new userData value
-				AFCH.userData.set( 'preferences', this.prefStore ).done( () => {
+				AFCH.userData.set( 'preferences', this.prefStore ).done( function () {
 					// When we're done, close the dialog and notify the user
 					prefs.$dialog.dialog( 'close' );
-					mw.notify( 'AFCH: Preferences saved successfully! They will take effect when the current page is ' +
-						'reloaded or when you browse to another page.' );
+					mw.notify( 'AFCH: প্যারামিতি সেটিং আইটেম সফলভাবে সংরক্ষিত! বর্তমান পাতাটি পুনঃলোড হলে বা অন্যান্য পাতাগুলি ব্রাউজ করা হলে এগুলি কার্যকর হবে৷' );
 				} );
 			};
 
 			/**
-			 * Adds a link to launch the preferences modification dialog
-			 *
-			 * @param {jQuery} $element element to append the link to
-			 * @param {string} linkText text to display in the link
-			 */
+	 * Adds a link to launch the preferences modification dialog
+	 *
+	 * @param {jQuery} $element element to append the link to
+	 * @param {string} linkText text to display in the link
+	 */
 			this.initLink = function ( $element, linkText ) {
 				$( '<span>' )
-					.text( linkText || 'Update preferences' )
+					.text( linkText || 'সেটিংস আপডেট করুন' )
 					.addClass( 'preferences-link link' )
 					.appendTo( $element )
-					.on( 'click', () => {
+					.click( function () {
 						prefs.initDialog();
 						prefs.$dialog.dialog( 'open' );
 					} );
@@ -1339,15 +1870,15 @@
 		},
 
 		/**
-		 * Represents a series of "views", aka templateable thingamajigs.
-		 * When creating a set of views, they are loaded from a given piece of
-		 * text. Uses <hogan.js>.
-		 *
-		 * Views on the cheap! Just use one mega template and divide it up into
-		 * lots of baby templates :)
-		 *
-		 * @param {string} [src] text to parse for template contents initially
-		 */
+	 * Represents a series of "views", aka templateable thingamajigs.
+	 * When creating a set of views, they are loaded from a given piece of
+	 * text. Uses <hogan.js>.
+	 *
+	 * Views on the cheap! Just use one mega template and divide it up into
+	 * lots of baby templates :)
+	 *
+	 * @param {string} [src] text to parse for template contents initially
+	 */
 		Views: function ( src ) {
 			this.views = {};
 
@@ -1356,19 +1887,17 @@
 			};
 
 			this.renderView = function ( name, data ) {
-				const view = this.views[ name ],
-					template = Hogan.compile( view );
+				var view = this.views[ name ], template = Hogan.compile( view );
 
 				return template.render( data );
 			};
 
 			this.loadFromSrc = function ( src ) {
-				let viewRegex = /<!--\s(.*?)\s-->\r?\n([\s\S]*?)<!--\s\/(.*?)\s-->/g,
+				var viewRegex = /<!--\s(.*?)\s-->\n([\s\S]*?)<!--\s\/(.*?)\s-->/g,
 					match = viewRegex.exec( src );
 
 				while ( match !== null ) {
-					const key = match[ 1 ],
-						content = match[ 2 ];
+					var key = match[ 1 ], content = match[ 2 ];
 
 					this.setView( key, content );
 
@@ -1381,11 +1910,11 @@
 		},
 
 		/**
-		 * Represents a specific window into an AFCH.Views object
-		 *
-		 * @param {AFCH.Views} views location where the views are gleaned
-		 * @param {jQuery} $element
-		 */
+	 * Represents a specific window into an AFCH.Views object
+	 *
+	 * @param {AFCH.Views} views location where the views are gleaned
+	 * @param {jQuery} $element
+	 */
 		Viewer: function ( views, $element ) {
 			this.views = views;
 			this.$element = $element;
@@ -1393,7 +1922,7 @@
 			this.previousState = false;
 
 			this.loadView = function ( view, data ) {
-				const code = this.views.renderView( view, data );
+				var code = this.views.renderView( view, data );
 
 				// Update the view cache
 				this.previousState = this.$element.clone( true );
@@ -1408,26 +1937,23 @@
 		},
 
 		/**
-		 * Removes a key from a given object and returns the value of the key
-		 *
-		 * @param {Object} object
-		 * @param {string} key
-		 * @return {Mixed}
-		 */
+	 * Removes a key from a given object and returns the value of the key
+	 * @param {string} key
+	 * @return {mixed}
+	 */
 		getAndDelete: function ( object, key ) {
-			const v = object[ key ];
+			var v = object[ key ];
 			delete object[ key ];
 			return v;
 		},
 
 		/**
-		 * Removes all occurences of a value from an array
-		 *
-		 * @param {Array} array
-		 * @param {Mixed} value
-		 */
+	 * Removes all occurences of a value from an array
+	 * @param {array} array
+	 * @param {mixed} value
+	 */
 		removeFromArray: function ( array, value ) {
-			let index = $.inArray( value, array );
+			var index = $.inArray( value, array );
 			while ( index !== -1 ) {
 				array.splice( index, 1 );
 				index = $.inArray( value, array );
@@ -1435,23 +1961,22 @@
 		},
 
 		/**
-		 * Gets the values of all elements matched by a selector, including
-		 * converting checkboxes to bools, providing textual values of select
-		 * elements, ignoring placeholder elements, and more.
-		 *
-		 * For a radio button group, pass in the container element, which must
-		 * be a fieldset with the appropriate "name" attribute. Its id will
-		 * be used as the key in the data object.
-		 *
-		 * @param {jQuery} $selector elements to get values from
-		 * @return {Object} object of values, with the ids as keys
-		 */
+	 * Gets the values of all elements matched by a selector, including
+	 * converting checkboxes to bools, providing textual values of select
+	 * elements, ignoring placeholder elements, and more.
+	 *
+	 * For a radio button group, pass in the container element, which must
+	 * be a fieldset with the appropriate "name" attribute. Its id will
+	 * be used as the key in the data object.
+	 *
+	 * @param {jQuery} $selector elements to get values from
+	 * @return {object} object of values, with the ids as keys
+	 */
 		getFormValues: function ( $selector ) {
-			const data = {};
+			var data = {};
 
-			$selector.each( ( _, element ) => {
-				let value, allTexts,
-					$element = $( element );
+			$selector.each( function ( _, element ) {
+				var value, allTexts, $element = $( element );
 
 				if ( element.type === 'checkbox' ) {
 					value = element.checked;
@@ -1459,6 +1984,11 @@
 					value = $element.find( ':checked' ).val();
 				} else {
 					value = $element.val();
+
+					// Ignore placeholder text
+					if ( value === $element.attr( 'placeholder' ) ) {
+						value = '';
+					}
 
 					// For <select multiple> with nothing selected, jQuery returns null...
 					// convert that to an empty array so that $.each() won't explode later
@@ -1486,85 +2016,78 @@
 		},
 
 		/**
-		 * Creates an <a> element that links to a given page.
-		 *
-		 * @param {string} pagename - The title of the page.
-		 * @param {string} displayTitle - What gets shown by the link.
-		 * @param {boolean} [newTab=true] - Whether to open page in a new tab.
-		 * @param {boolean} dontFollowRedirects - whether to add &redirect=no to URLs, to prevent auto redirecting when clicked
-		 * @return {jQuery} <a> element
-		 */
-		makeLinkElementToPage: function ( pagename, displayTitle, newTab, dontFollowRedirects ) {
-			const actualTitle = pagename.replace( /_/g, ' ' );
+	 * Creates an <a> element that links to a given page.
+	 * @param {string} pagename - The title of the page.
+	 * @param {string} displayTitle - What gets shown by the link.
+	 * @param {boolean} [newTab=true] - Whether to open page in a new tab.
+	 * @return {jQuery} <a> element
+	 */
+		makeLinkElementToPage: function ( pagename, displayTitle, newTab ) {
+			var actualTitle = pagename.replace( /_/g, ' ' );
 
 			// newTab is an optional parameter.
 			newTab = ( typeof newTab === 'undefined' ) ? true : newTab;
 
-			let options = {};
-			if ( dontFollowRedirects ) {
-				options = { redirect: 'no' };
-			}
-			const url = mw.util.getUrl( actualTitle, options );
-
 			return $( '<a>' )
-				.attr( 'href', url )
-				.attr( 'id', 'afch-cat-link-' + pagename.toLowerCase().replace( / /g, '-' ).replace( /\//g, '-' ) )
+				.attr( 'href', mw.util.getUrl( actualTitle ) )
+				.attr(
+					'id',
+					'afch-cat-link-' +
+				pagename.toLowerCase().replace( / /g, '-' ).replace( /\//g, '-' ) )
 				.attr( 'title', actualTitle )
 				.text( displayTitle || actualTitle )
 				.attr( 'target', newTab ? '_blank' : '_self' );
 		},
 
 		/**
-		 * Creates an <a> element that links to a random page in the given category.
-		 *
-		 * @param {string} pagename - The name of the category (without the namespace).
-		 * @param {string} displayTitle - What gets shown by the link.
-		 * @return {jQuery} <a> element
-		 */
+	 * Creates an <a> element that links to a random page in the given category.
+	 * @param {string} pagename - The name of the category (without the
+	 *	 namespace).
+	 * @param {string} displayTitle - What gets shown by the link.
+	 * @return {jQuery} <a> element
+	 */
 		makeLinkElementToCategory: function ( pagename, displayTitle ) {
-			const linkElement = AFCH.makeLinkElementToPage( 'Special:RandomInCategory/' + pagename, displayTitle, false ),
-				request = {
+			var linkElement = AFCH.makeLinkElementToPage(
+					'Special:RandomInCategory/' + pagename, displayTitle, false ),
+				linkText = displayTitle || pagename.replace( /_/g, ' ' ), request = {
 					action: 'query',
 					titles: 'Category:' + pagename,
 					prop: 'categoryinfo'
 				},
 				linkSpan = $( '<span>' ).append( linkElement ),
-				countSpanId = 'afch-cat-count-' + pagename
-					.toLowerCase()
-					.replace( / /g, '-' )
-					.replace( /\//g, '-' );
+				countSpanId = 'afch-cat-count-' +
+		pagename.toLowerCase().replace( / /g, '-' ).replace( /\//g, '-' );
 
 			linkSpan.append( $( '<span>' ).attr( 'id', countSpanId ) );
 
-			AFCH.api.get( request )
-				.done( ( data ) => {
-					if ( data.query.pages && !data.query.pages[ '-1' ] ) {
-						const pageKey = Object.keys( data.query.pages )[ 0 ],
-							pagesCount = data.query.pages[ pageKey ].categoryinfo.pages;
-						$( '#' + countSpanId ).text( ' (' + pagesCount + ')' );
+			AFCH.api.get( request ).done( function ( data ) {
+				if ( data.query.pages && !data.query.pages[ '-1' ] ) {
+					var pageKey = Object.keys( data.query.pages )[ 0 ],
+						pagesCount = data.query.pages[ pageKey ].categoryinfo.pages;
+					$( '#' + countSpanId ).text( ' (' + pagesCount + ')' );
 
-						// Disable link if there aren't any pages
-						$( '#afch-cat-link-' + pagename.toLowerCase().replace( / /g, '-' ).replace( /\//g, '-' ) ).replaceWith( displayTitle );
-					}
-				} );
+					// Disable link if there aren't any pages
+					$( '#afch-cat-link-' +
+			pagename.toLowerCase().replace( / /g, '-' ).replace( /\//g, '-' ) )
+						.replaceWith( displayTitle );
+				}
+			} );
 
 			return linkSpan;
 		},
 
 		/**
-		 * Converts [[wikilink]] -> <a>
-		 *
-		 * @param {string} wikicode
-		 * @return {string}
-		 */
+	 * Converts [[wikilink]] -> <a>
+	 *
+	 * @param {string} wikicode
+	 * @return {string}
+	 */
 		convertWikilinksToHTML: function ( wikicode ) {
-			let newCode = wikicode,
-				wikilinkRegex = /\[\[(.*?)\s*(?:\|\s*(.*?))?\]\]/g,
+			var newCode = wikicode, wikilinkRegex = /\[\[(.*?)\s*(?:\|\s*(.*?))?\]\]/g,
 				wikilinkMatch = wikilinkRegex.exec( wikicode );
 
 			while ( wikilinkMatch ) {
-				const title = wikilinkMatch[ 1 ],
-					displayTitle = wikilinkMatch[ 2 ],
+				var title = wikilinkMatch[ 1 ], displayTitle = wikilinkMatch[ 2 ],
 					newLink = AFCH.makeLinkElementToPage( title, displayTitle );
 
 				// Replace the wikilink with the new <a> element
@@ -1578,239 +2101,50 @@
 		},
 
 		/**
-		 * Remove empty section at the end of the draft. Empty sections at the end of drafts
-		 * frequently happen because of how the "Resubmit" button on the "declined" template
-		 * works. The empty section may have categories after it - keep them there.
-		 *
-		 * @param {string} wikicode
-		 * @return {string} wikicode
-		 */
-		removeEmptySectionAtEnd: function ( wikicode ) {
-			// Hard to write a regex that doesn't catastrophic backtrack while still saving multiple categories and multiple blank lines. So we'll do this the old-fashioned way...
-
-			// Divide wikitext into lines
-			let lines = wikicode.split( '\n' );
-
-			// Buffers
-			const linesToKeep = [];
-			let i;
-
-			// Crawl the list of lines backward (bottom up)
-			let count = lines.length;
-			for ( i = count - 1; i >= 0; i-- ) {
-				const line = lines[ i ];
-				const isWhitespace = line.match( /^\s*$/ );
-				const isCategory = line.match( /^\s*\[\[:?Category:/i );
-				const isHeading = line.match( /^==[^=]+==$/i );
-
-				if ( isWhitespace || isCategory ) {
-					linesToKeep.push( line );
-					continue;
-				} else if ( isHeading ) {
-					break;
-				}
-
-				// If it's something besides the three things above, such as text, then there's no blank headings to delete. Return unaltered wikitext. We're done.
-				return wikicode;
-			}
-
-			// Delete the lines we checked from the array of lines. We'll be replacing these with new lines in a moment.
-			lines = lines.slice( 0, i );
-
-			// Add the categories and blank lines back
-			// Need to iterate backward, same as the loop above
-			count = linesToKeep.length;
-			for ( let j = count - 1; j >= 0; j-- ) {
-				const lineToKeep = linesToKeep[ j ];
-				lines.push( lineToKeep );
-			}
-
-			wikicode = lines.join( '\n' );
-
-			// The old algorithm had some quirks related to adding and removing \n. Mimic the old algorithm for now, so that unit tests pass and users don't have to get used to new behavior.
-			if ( wikicode.match( /\n\n$/ ) ) {
-				wikicode = wikicode.slice( 0, -1 );
-			}
-			wikicode = wikicode.replace( /\n(\n\n\[\[:?Category:)/i, '$1' );
-
-			return wikicode;
-		},
-
-		/**
-		 * @param {string} wikicode Wikitext of the draft talk page
-		 * @param {string} newAssessment Value of "Article assessment" dropdown list, or "" if blank
-		 * @param {number} revId Revision ID of the draft that is being accepted
-		 * @param {boolean} isBiography Value of the "Is the article a biography?" check box
-		 * @param {Array} newWikiProjects Value of the "Add WikiPrjects" part of the form. The <input> is a chips interface called jquery.chosen. Note that if there are existing WikiProject banners on the page, the form will auto-add those to the "Add WikiProjects" part of the form when it first loads.
-		 * @param {string} lifeStatus Value of "Is the subject alive?" dropdown list ("unknown", "living", "dead")
-		 * @param {string} subjectName Value of the "Subject name (last, first)" text input, or "" if blank
-		 * @return {Object} wikicode
-		 */
-		addTalkPageBanners: function ( wikicode, newAssessment, revId, isBiography, newWikiProjects, lifeStatus, subjectName ) {
-			// build an array of all banners already on page
-			const bannerTemplates = 'wikiproject (?!banner)|football|oka';
-			const bannerTemplateRegEx = new RegExp( '{{(?:' + bannerTemplates + ')[^}]*}}', 'gi' );
-			let banners = wikicode.match( bannerTemplateRegEx ) || [];
-
-			// delete all banners already on page
-			banners.forEach( ( v ) => {
-				wikicode = wikicode.replace( v, '' );
-			} );
-
-			// delete shell already on page
-			const bannerShellTemplates = 'WikiProject banner shell|WikiProjectBanners|WikiProject Banners|WPB|WPBS|WikiProject cooperation shell|Wikiprojectbannershell|WikiProject Banner Shell|Wpb|WPBannerShell|Wpbs|Wikiprojectbanners|WP Banner Shell|WP banner shell|Bannershell|Wikiproject banner shell|WIkiProjectBanner Shell|WikiProjectBannerShell|WikiProject BannerShell|Coopshell|WikiprojectBannerShell|WikiProject Shell|Scope shell|Project shell|WikiProject shell|WikiProject banner|Wpbannershell|Multiple wikiprojects|Wikiproject banner holder|Project banner holder|WikiProject banner shell\\/test1|Article assessment|WikiProject bannershell';
-			const bannerShellRegEx = new RegExp( '{{(?:' + bannerShellTemplates + ')[^}]*}}', 'is' );
-			wikicode = wikicode.replace( bannerShellRegEx, '' );
-
-			// trim. makes unit tests more stable
-			wikicode = wikicode.trim();
-
-			// Add AFC banner to array.
-			// Put at top for historical reasons. People are used to it being there.
-			banners.unshift(
-				'{{subst:WPAFC/article' +
-				( revId ? ' |oldid=' + revId : '' ) +
-				'}}'
-			);
-
-			// delete existing biography banner. when accepting, reviewer is forced to choose if it's a biography or not, so we'll add (or not add) our own biography banner later
-			banners = banners.filter( ( value ) => !value.match( /^{{WikiProject Biography/i ) );
-
-			// add biography banner to array. and add |living= and |listas= to banner shell
-			let bannerShellExtraParams = '';
-			if ( isBiography ) {
-				banners.push(
-					'{{WikiProject Biography}}'
-				);
-
-				if ( lifeStatus === 'living' ) {
-					bannerShellExtraParams += ' |living=yes';
-				} else if ( lifeStatus === 'dead' ) {
-					bannerShellExtraParams += ' |living=no';
-				}
-
-				if ( subjectName ) {
-					bannerShellExtraParams += ' |listas=' + subjectName;
-				}
-			}
-
-			// add disambiguation banner to array
-			if ( newAssessment === 'Disambig' ) {
-				banners.push( '{{WikiProject Disambiguation}}' );
-			}
-
-			// add banners selected in UI to array
-			for ( const key in newWikiProjects ) {
-				banners.push( '{{' + newWikiProjects[ key ] + '}}' );
-			}
-
-			// remove duplicate banners, case insensitive
-			banners = AFCH.removeDuplicateBanners( banners );
-
-			// delete |class= from banners in array
-			banners = banners.map( ( value ) => value.replace( /\s*\|\s*class\s*=\s*[^|}]*([\n|}])/, '$1' ) );
-
-			// The banner shell automatically detects several classes. If it's one of these auto detected classes, write |class= blank instead of writing the class.
-			if ( [ 'Disambig', 'Template', 'Redirect', 'Portal', 'Project', 'NA' ].indexOf( newAssessment ) !== -1 ) {
-				newAssessment = '';
-			}
-
-			// Convert array back to wikitext and append to top of talk page.
-			// Always add a shell even if it's just wrapping one banner, for code simplification reasons.
-			// Add |class= to shell.
-			// Add |1=. Improves readability when lots of other parameters present.
-			wikicode = '{{WikiProject banner shell' +
-				( newAssessment ? ' |class=' + newAssessment : '' ) +
-				bannerShellExtraParams +
-				' |1=\n' +
-				banners.join( '\n' ) +
-				'\n}}\n' +
-				wikicode;
-
-			// add an extra line break between the last template and the first heading
-			wikicode = wikicode.replace( /}}\n==/, '}}\n\n==' );
-
-			// trim. makes unit tests more stable
-			wikicode = wikicode.trim();
-
-			return wikicode;
-		},
-
-		/**
-		 * In an array of templates, remove duplicate templates, case insensitive.
-		 *
-		 * @param {Array} banners [ '{{WikiProject Australia}}', {{wikiproject australia}}', '{{WikiProject Australia|class=B}}' ]
-		 * @return {Array} banners [ '{{WikiProject Australia}}' ]
-		 */
-		removeDuplicateBanners: function ( banners ) {
-			const uniqueBanners = [];
-			const bannerMap = {};
-			banners.forEach( ( banner ) => {
-				let bannerKey = banner.toLowerCase().match( /{{[^|}]+/ )[ 0 ];
-				// get rid of whitespace at the end of the template name
-				bannerKey = bannerKey.trim();
-				if ( !bannerMap[ bannerKey ] ) {
-					uniqueBanners.push( banner );
-					bannerMap[ bannerKey ] = true;
-				}
-			} );
-			return uniqueBanners;
-		},
-
-		/**
-		 * Returns the relative time that has elapsed between an oldDate and a nowDate
-		 *
-		 * @param {Date|string} old (if it is a string it will be assumed to be a
-		 *                           MediaWiki timestamp and converted to a Date first)
-		 * @param {Date} now optional, defaults to `new Date()`
-		 * @return {string}
-		 */
+	 * Returns the relative time that has elapsed between an oldDate and a nowDate
+	 * @param {Date|string} old (if it is a string it will be assumed to be a
+	 *							 MediaWiki timestamp and converted to a Date
+	 * first)
+	 * @param {Date} now optional, defaults to `new Date()`
+	 * @return {string}
+	 */
 		relativeTimeSince: function ( old, now ) {
-			let oldDate = typeof old === 'object' ? old : AFCH.mwTimestampToDate( old ),
+			var oldDate = typeof old === 'object' ? old : AFCH.mwTimestampToDate( old ),
 				nowDate = typeof now === 'object' ? now : new Date(),
-				msPerMinute = 60 * 1000,
-				msPerHour = msPerMinute * 60,
-				msPerDay = msPerHour * 24,
-				msPerMonth = msPerDay * 30,
-				msPerYear = msPerDay * 365,
-				elapsed = nowDate - oldDate,
-				amount, unit;
+				msPerMinute = 60 * 1000, msPerHour = msPerMinute * 60,
+				msPerDay = msPerHour * 24, msPerMonth = msPerDay * 30,
+				msPerYear = msPerDay * 365, elapsed = nowDate - oldDate, amount, unit;
 
 			if ( elapsed < msPerMinute ) {
 				amount = Math.round( elapsed / 1000 );
-				unit = 'second';
+				unit = 'দ্বিতীয়';
 			} else if ( elapsed < msPerHour ) {
 				amount = Math.round( elapsed / msPerMinute );
-				unit = 'minute';
+				unit = 'মিনিট';
 			} else if ( elapsed < msPerDay ) {
 				amount = Math.round( elapsed / msPerHour );
-				unit = 'hour';
+				unit = 'ঘন্টা';
 			} else if ( elapsed < msPerMonth ) {
 				amount = Math.round( elapsed / msPerDay );
-				unit = 'day';
+				unit = 'দিন';
 			} else if ( elapsed < msPerYear ) {
 				amount = Math.round( elapsed / msPerMonth );
-				unit = 'month';
+				unit = 'মাস';
 			} else {
 				amount = Math.round( elapsed / msPerYear );
-				unit = 'year';
+				unit = 'বছর';
 			}
 
-			if ( amount !== 1 ) {
-				unit += 's';
-			}
-
-			return [ amount, unit, 'ago' ].join( ' ' );
+			return [ amount, unit, 'আগে' ].join( '' );
 		},
 
 		/**
-		 * Converts an element into a toggle for another element
-		 *
-		 * @param {string} toggleSelector When clicked, will show/hide elementSelector
-		 * @param {string} elementSelector Element(s) to be shown or hidden
-		 * @param {string} showText e.g. "Show the div"
-		 * @param {string} hideText e.g. "Hide the div"
-		 */
+	 * Converts an element into a toggle for another element
+	 * @param {string} toggleSelector When clicked, will show/hide elementSelector
+	 * @param {string} elementSelector Element(s) to be shown or hidden
+	 * @param {string} showText e.g. "Show the div"
+	 * @param {string} hideText e.g. "Hide the div"
+	 */
 		makeToggle: function ( toggleSelector, elementSelector, showText, hideText ) {
 			// Remove current click handlers
 			$( toggleSelector ).off( 'click' );
@@ -1826,37 +2160,37 @@
 			toggleState( $( elementSelector ).is( ':visible' ) );
 
 			// Add the new click handler
-			$( document ).on( 'click', toggleSelector, () => {
+			$( document ).on( 'click', toggleSelector, function () {
 				toggleState( $( elementSelector ).hasClass( 'hidden' ) );
 			} );
 		},
 
 		/**
-		 * Gets the full raw HTML content of a jQuery object
-		 *
-		 * @param {jQuery} $element
-		 * @return {string}
-		 */
+	 * Gets the full raw HTML content of a jQuery object
+	 * @param {jQuery} $element
+	 * @return {string}
+	 */
 		jQueryToHtml: function ( $element ) {
 			return $( '<div>' ).append( $element ).html();
 		},
 
 		/**
-		 * Given a string, returns by default a Date() object
-		 * or, if mwstyle is true, a MediaWiki-style timestamp
-		 *
-		 * If there is no match, return false
-		 *
-		 * @param {string} string string to parse
-		 * @param {boolean} mwstyle convert to a mediawiki-style timestamp?
-		 * @return {Date|number}
-		 */
+	 * Given a string, returns by default a Date() object
+	 * or, if mwstyle is true, a MediaWiki-style timestamp
+	 *
+	 * If there is no match, return false
+	 *
+	 * @param {string} string string to parse
+	 * @return {Date|integer}
+	 */
 		parseForTimestamp: function ( string, mwstyle ) {
-			let exp, match, date;
+			var exp, match, date;
 
-			exp = new RegExp( '(\\d{1,2}):(\\d{2}), (\\d{1,2}) ' +
-				'(January|February|March|April|May|June|July|August|September|October|November|December) ' +
-				'(\\d{4}) \\(UTC\\)', 'g' );
+			exp = new RegExp(
+				'(\\d{1,2}):(\\d{2}), (\\d{1,2}) ' +
+			'(1মাস|2মাস|3মাস|4মাস|5মাস|6মাস|7মাস|8মাস|9মাস|10মাস|11মাস|12মাস) ' +
+			'(\\d{4}) \\(UTC\\)',
+				'g' );
 
 			match = exp.exec( string );
 
@@ -1866,7 +2200,9 @@
 
 			date = new Date();
 			date.setUTCFullYear( match[ 5 ] );
-			date.setUTCMonth( mw.config.get( 'wgMonthNames' ).indexOf( match[ 4 ] ) - 1 ); // stupid javascript
+			date.setUTCMonth(
+				mw.config.get( 'wgMonthNames' ).indexOf( match[ 4 ] ) -
+		1 ); // stupid javascript
 			date.setUTCDate( match[ 3 ] );
 			date.setUTCHours( match[ 1 ] );
 			date.setUTCMinutes( match[ 2 ] );
@@ -1880,22 +2216,22 @@
 		},
 
 		/**
-		 * Parses a MediaWiki internal YYYYMMDDHHMMSS timestamp
-		 *
-		 * @param {string} string
-		 * @return {Date|boolean} if unable to parse, returns false
-		 */
+	 * Parses a MediaWiki internal YYYYMMDDHHMMSS timestamp
+	 * @param {string} string
+	 * @return {Date|bool} if unable to parse, returns false
+	 */
 		mwTimestampToDate: function ( string ) {
-			let date, dateMatches = /(\d{4})(\d\d)(\d\d)(\d\d)(\d\d)(\d\d)/.exec( string );
+			var date,
+				dateMatches = /(\d{4})(\d\d)(\d\d)(\d\d)(\d\d)(\d\d)/.exec( string );
 
 			// If it *isn't* actually a MediaWiki-style timestamp, pass directly to date
 			if ( dateMatches === null ) {
 				date = new Date( string );
-			// Otherwise use Date.UTC to assemble a date object using UTC time
+				// Otherwise use Date.UTC to assemble a date object using UTC time
 			} else {
 				date = new Date( Date.UTC(
-					dateMatches[ 1 ], dateMatches[ 2 ] - 1, dateMatches[ 3 ], dateMatches[ 4 ], dateMatches[ 5 ], dateMatches[ 6 ]
-				) );
+					dateMatches[ 1 ], dateMatches[ 2 ] - 1, dateMatches[ 3 ], dateMatches[ 4 ],
+					dateMatches[ 5 ], dateMatches[ 6 ] ) );
 			}
 
 			// If invalid, return false
@@ -1907,55 +2243,53 @@
 		},
 
 		/**
-		 * Converts a Date object to YYYYMMDDHHMMSS format
-		 *
-		 * @param {Date} date
-		 * @return {number}
-		 */
+	 * Converts a Date object to YYYYMMDDHHMMSS format
+	 * @param {Date} date
+	 * @return {number}
+	 */
 		dateToMwTimestamp: function ( date ) {
-			return +( date.getUTCFullYear() +
-				( '0' + ( date.getUTCMonth() + 1 ) ).slice( -2 ) +
-				( '0' + date.getUTCDate() ).slice( -2 ) +
-				( '0' + date.getUTCHours() ).slice( -2 ) +
-				( '0' + date.getUTCMinutes() ).slice( -2 ) +
-				( '0' + date.getUTCSeconds() ).slice( -2 ) );
+			return +(
+				date.getUTCFullYear() + ( '0' + ( date.getUTCMonth() + 1 ) ).slice( -2 ) +
+		( '0' + date.getUTCDate() ).slice( -2 ) +
+		( '0' + date.getUTCHours() ).slice( -2 ) +
+		( '0' + date.getUTCMinutes() ).slice( -2 ) +
+		( '0' + date.getUTCSeconds() ).slice( -2 ) );
 		},
 
 		/**
-		 * Returns the value of the specified URL parameter. By default it uses
-		 * the current window's address. Optionally you can pass it a custom location.
-		 * It returns null if the parameter is not present, or an empty string if the
-		 * parameter is empty.
-		 *
-		 * @param {string} name parameter to get
-		 * @param {string} url optional; custom url to search
-		 * @return {string|null} value, or null if not present
-		 */
+	 * Returns the value of the specified URL parameter. By default it uses
+	 * the current window's address. Optionally you can pass it a custom location.
+	 * It returns null if the parameter is not present, or an empty string if the
+	 * parameter is empty.
+	 *
+	 * @param {string} name parameter to get
+	 * @param {string} url optional; custom url to search
+	 * @return {string|null} value, or null if not present
+	 */
 		getParam: function () {
 			return mw.util.getParamValue.apply( this, arguments );
 		},
 
 		/**
-		 * Given a code for an AfC decline reason (e.g. "v"), returns some HTML code
-		 * describing the reason.
-		 *
-		 * @param {string} code an AfC decline reason code
-		 * @return {jQuery.Deferred} Resolves with the requested HTML
-		 */
+	 * Given a code for an AfC decline reason (e.g. "v"), returns some HTML code
+	 * describing the reason.
+	 *
+	 * @param {string} code an AfC decline reason code
+	 * @return {$.Deferred} Resolves with the requested HTML
+	 */
 		getReason: function ( code ) {
-			const deferred = $.Deferred();
+			var deferred = $.Deferred();
 
-			$.post( 'https://en.wikipedia.org/api/rest_v1/transform/wikitext/to/html',
+			$.post(
+				'https://bn.wikipedia.org/api/rest_v1/transform/wikitext/to/html',
 				'wikitext={{AFC submission/comments|' + code + '}}&body_only=true',
-				( data ) => {
+				function ( data ) {
 					deferred.resolve( data );
-				}
-			);
+				} );
 
 			return deferred;
 		}
 
 	} );
-
 }( AFCH, jQuery, mediaWiki ) );
-// </nowiki>
+//</nowiki>
