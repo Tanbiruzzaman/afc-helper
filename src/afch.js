@@ -1,47 +1,63 @@
-// <nowiki>
-( function () {
-	// Check that we're in the right namespace and on the right page
-	switch ( mw.config.get( 'wgNamespaceNumber' ) ) {
-		case 4: // Wikipedia
-		case 5: { // Wikipedia talk
-			const pageName = mw.config.get( 'wgTitle' );
-			// return nothing for now, all drafts are now under Draft namespace
-			// currently only the article submission script is running here.
-			// to be used when script(s) for other modules such as category and
-			// redirect requests are reintergrated into here.
-			if ( pageName !== 'Articles for creation/sandbox' ) {
-				return;
+/* https://github.com/Tanbiruzzaman/afch-bnwp, translated and adapted from
+ * https://github.com/WPAFC/afch-rewrite */
+//<nowiki>
+( function ( $, mw ) {
+	var subscriptToLoad = false,
+		pageName = mw.config.get( 'wgPageName' ).replace( /_/g, ' ' ),
+
+		// `loadMap` determines which scripts should be loaded
+		// on each page. Each key is a subscript name and
+		// its value is a list of page prefixes on which it
+		// should be loaded.
+
+		loadMap = {
+			// `submissions.js` is for reviewing textual
+			// Articles for Creation submissions.
+			submissions: [
+				'উইকিপিডিয়া:নিবন্ধ সৃষ্টিকরণ/', 'উইকিপিডিয়া আলোচনা:নিবন্ধ সৃষ্টিকরণ/', 'ব্যবহারকারী:', 'খসড়া:'
+			]
+		};
+
+	$.each( loadMap, function ( script, prefixes ) {
+		$.each( prefixes, function ( _, prefix ) {
+			if ( pageName.indexOf( prefix ) === 0 ) {
+				subscriptToLoad = script;
+				return false;
 			}
-			break;
-		}
-		case 2: // User
-		case 118: // Draft
-			break;
-		default:
-			return;
-	}
+		} );
 
-	// Initialize the AFCH object
-	window.AFCH = {};
-
-	// Set up constants
-	AFCH.consts = {};
-
-	AFCH.consts.scriptpath = mw.config.get( 'wgServer' ) + mw.config.get( 'wgScript' );
-
-	// These next two statements (setting beta and baseurl) may be modified
-	// by the uploading script! If you change them, check that the uploading
-	// script at scripts/upload.py doesn't break.
-	AFCH.consts.beta = true;
-	AFCH.consts.baseurl = AFCH.consts.scriptpath +
-		'?action=raw&ctype=text/javascript&title=MediaWiki:Gadget-afch.js';
-
-	$.getScript( AFCH.consts.baseurl + '/core.js' ).done( () => {
-		const loaded = AFCH.load( 'submissions' ); // perhaps eventually there will be more modules besides just 'submissions'
-		if ( !loaded ) {
-			mw.notify( 'AFCH could not be loaded: ' + ( AFCH.error || 'unknown error' ),
-				{ title: 'AFCH error' } );
-		}
+		// Return false and break out of the loop if already found
+		return !!subscriptToLoad;
 	} );
-}() );
-// </nowiki>
+
+	if ( subscriptToLoad ) {
+		// Initialize the AFCH object
+		window.AFCH = {};
+
+		// Set up constants
+		AFCH.consts = {};
+
+		// Master version data
+		AFCH.consts.version = '0.1.0';
+		AFCH.consts.versionName = 'Beta';
+
+		// FIXME: Change when moving into production
+		AFCH.consts.beta = true;
+
+		AFCH.consts.scriptpath =
+      mw.config.get( 'wgServer' ) + mw.config.get( 'wgScript' );
+		AFCH.consts.baseurl = AFCH.consts.scriptpath +
+      '?action=raw&ctype=text/javascript&title=ব্যবহারকারী:Tanbiruzzaman/afch-master.js';
+
+		$.getScript( AFCH.consts.baseurl + '/core.js' ).done( function () {
+			var loaded = AFCH.load( subscriptToLoad );
+			if ( !loaded ) {
+				mw.notify(
+					'AFCH লোড হচ্ছেনা:' +
+              ( AFCH.error || 'অজানা ত্রুটি' ),
+					{ title: 'AFCH ত্রুটি' } );
+			}
+		} );
+	}
+}( jQuery, mediaWiki ) );
+//</nowiki>
