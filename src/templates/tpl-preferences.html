@@ -1,40 +1,28 @@
-// <nowiki>
+/*Translated and adapted from https://github.com/WPAFC/afch-rewrite */
+//<nowiki>
 
 <!-- preferences -->
 <div class="afch afch-form afch-preferences">
 	<div class="details centered">
-		<strong>AFCH</strong>
-		<div>User-Agent: {{userAgent}}</div>
+		<strong>AFCH বেটা</strong>
+		<div>ব্যবহারকারী-এজেন্ট：{{userAgent}}</div>
 	</div>
 	<div id="autoOpenWrapper">
-		<label for="autoOpen" class="afch-label">Automatically open the review panel on AfC submissions</label>
+		<label for="autoOpen" class="afch-label">কোনো খসড়া পাতা খোলার সাথে সাথেই AFCH চালু হোক</label>
 		<input type="checkbox" id="autoOpen" class="afch-input" {{#autoOpen}}checked{{/autoOpen}} />
 	</div>
 	<div id="launchLinkPositionWrapper">
-		<label for="launchLinkPosition" class="afch-label">Location of "Review (AFCH)" link</label>
+		<label for="launchLinkPosition" class="afch-label">"খসড়া পর্যালো (AFCH)"  অবস্থান</label>
 		<select id="launchLinkPosition" class="afch-input">
-			<option value="p-cactions">Triangle dropdown next to the "Edit" and "History" links</option>
-			<option value="p-tb">"Tools" section on the lefthand side of the page</option>
+			<option value="p-cactions">"সম্পাদনা" ও "ইতিহাস" এর পাশে</option>
+			<option value="p-tb">পাতার বাম পাশে "সরঞ্জাম" দন্ডে</option>
 		</select>
 	</div>
 	<div id="logCsdWrapper">
-		<label for="logCsd" class="afch-label">Log speedy deletion nominations</label>
+		<label for="logCsd" class="afch-label">দ্রুত অপসারণ প্রস্তাবনার রেকর্ড রাখুন</label>
 		<input type="checkbox" id="logCsd" class="afch-input" {{#logCsd}}checked{{/logCsd}} />
 	</div>
-	<div id="logAfcWrapper">
-		<label for="logAfc" class="afch-label">Log acceptances, declines, and rejects</label>
-		<input type="checkbox" id="logAfc" class="afch-input" {{#logAfc}}checked{{/logAfc}} />
-	</div>
-	<div id="noWatchWrapper">
-		<label for="noWatch" class="afch-label">Do not add pages to watchlist</label>
-		<input type="checkbox" id="noWatch" class="afch-input" {{#noWatch}}checked{{/noWatch}} />
-	</div>
-	<div id="autoSubscribeWrapper">
-		<label for="autoSubscribe" class="afch-label"><a href="https://www.mediawiki.org/wiki/Help:DiscussionTools#Topic_subscriptions" target="_blank">Receive a notification</a> when a draft author replies to a user talk message you left them</label>
-		<input type="checkbox" id="autoSubscribe" class="afch-input" {{#autoSubscribe}}checked{{/autoSubscribe}} />
-	</div>
-	<!-- When adding new preferences, don't forget to update core.js prefDefaults -->
 </div>
 <!-- /preferences -->
 
-// </nowiki>
+//</nowiki>
