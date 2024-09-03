@@ -1,27 +1,28 @@
-// <nowiki>
+/* https://github.com/Tanbiruzzaman/afch-bnwp,translated and adapted from https://github.com/WPAFC/afch-rewrite */
+//<nowiki>
 
 <!-- main -->
 <div class="review-panel initial">
 	<div class="initial-header">
-		<span>AFCH&nbsp;
+		<span>AFCH v<span title="{{versionName}}">{{version}}</span>&nbsp;
 		(<!-- Disabled due to issue #71 <span class="feedback-wrapper"></span> | --><span class="preferences-wrapper"></span>)</span>
-		Reviewing "{{title}}"
+		"{{title}}" পর্যালোচনা
 	</div>
 	<div class="warnings hidden"></div>
 	<div class="button-wrapper">
-		{{#accept}}<a id="afchAccept" class="accept afch-button gradient-button">Accept</a>{{/accept}}
-		{{#decline}}<a id="afchDecline" class="decline afch-button gradient-button">Decline/Reject</a>{{/decline}}
-		{{#comment}}<a id="afchComment" class="comment afch-button gradient-button">Comment</a>{{/comment}}
-		{{#submit}}<a id="afchSubmit" class="submit afch-button gradient-button">Submit</a>{{/submit}}
-		<a id="afchG13" class="g13 afch-button gradient-button g13-related {{^g13}}hidden{{/g13}}">Request G13 deletion</a>
-		<a id="afchPostponeG13" class="postpone-g13 afch-button gradient-button g13-related {{^g13}}hidden{{/g13}}">Postpone G13</a>
+		{{#accept}}<a id="afchAccept" class="accept afch-button gradient-button">গ্রহণ করুন</a>{{/accept}}
+		{{#decline}}<a id="afchDecline" class="decline afch-button gradient-button">প্রত্যাখ্যান করুন</a>{{/decline}}
+		{{#comment}}<a id="afchComment" class="comment afch-button gradient-button">মন্তব্য রাখুন</a>{{/comment}}
+		{{#submit}}<a id="afchSubmit" class="submit afch-button gradient-button">জমা দিন</a>{{/submit}}
+		<a id="afchO7" class="o7 afch-button gradient-button o7-related {{^o7}}hidden{{/o7}}">Request O7 to remove quickly</a>
+		<a id="afchPostponeO7" class="postpone-o7 afch-button gradient-button o7-related {{^o7}}hidden{{/o7}}">Postponed O7</a>
 		<div id="afchExtra" class="extra afch-button">
 			<div class="wrapper">
-				<div class="open" title="View additional options">«</div>
+				<div class="open" title="See other options">«</div>
 				<div class="links">
-					<a id="afchClean" class="link">Clean submission</a>
+					<a id="afchClean" class="link">Maintenance Cleanup</a>
 					<a id="afchMark" class="link">
-						{{#alreadyUnderReview}}Unmark{{/alreadyUnderReview}}{{^alreadyUnderReview}}Mark{{/alreadyUnderReview}} as under review
+						{{#alreadyUnderReview}}বাতিল করুন{{/alreadyUnderReview}}{{^alreadyUnderReview}}{{/alreadyUnderReview}}পর্যালোচনাধীন বলে চিহ্নিত করুন
 					</a>
 				</div>
 			</div>
@@ -38,7 +39,7 @@
 			<td class="timestamp"><span title="{{timestamp}}">{{relativeTimestamp}}</span>:</td>
 			<td class="detail">
 				<span class="reason">{{{reason}}}</span>
-				<span class="actor">(deleted by <a href="{{deletorLink}}">{{deletor}}</a>)</span>
+				<span class="actor">(quilt<a href="{{deletorLink}}">{{deletor}}</a>মুছে ফেলুন)</span>
 			</td>
 		</tr>
 		{{/deletions}}
@@ -50,64 +51,54 @@
 <div class="review-panel {{actionClass}}">
 	<div class="header">{{actionTitle}}...</div>
 	<div id="afchContent" class="content centered">
-		<div id="afchSubmitForm" data-running="Working..." class="gradient-button button-centered {{actionClass}}">Working...</div>
+		<div id="afchSubmitForm" data-running="লোডিং..." class="gradient-button button-centered {{actionClass}}">লোডিং...</div>
 	</div>
 </div>
 <!-- /quick-action-processing -->
 
 <!-- accept -->
 <div class="review-panel accept">
-	<div class="header">Accepting...</div>
+	<div class="header">গ্রহণ করা হচ্ছে...</div>
 	<div id="afchContent" class="content">
 
 		<div id="newTitleWrapper">
-			<label for="newTitle" class="afch-label">New title</label>
-			<input type="text" id="newTitle" class="afch-input afch-textfield" placeholder="Target page name"
+			<label for="newTitle" class="afch-label">নতুন শিরোনাম</label>
+			<input type="text" id="newTitle" class="afch-input afch-textfield" placeholder="লক্ষ্য পাতার নাম"
 				{{#newTitle}}value="{{newTitle}}"{{/newTitle}} />
 			<span id="titleStatus"></span>
 		</div>
 
 		<div id="assessmentWrapper">
-			<label for="newAssessment" class="afch-label">Article assessment</label>
+			<label for="newAssessment" class="afch-label">মূল্যায়ন</label>
 			<select id="newAssessment" class="afch-input">
 				<option value="" selected></option>
-				<option value="B">B-class</option>
-				<option value="C">C-class</option>
-				<option value="Start">Start-class</option>
-				<option value="Stub">Stub-class</option>
-				<option value="List">List-class</option>
-				<option value="Disambig">Disambig-class</option>
-				<option value="Template">Template-class</option>
-				<option value="Redirect">Redirect-class</option>
-				<option value="Portal">Portal-class</option>
-				<option value="Project">Project-class</option>
-				<option value="NA">NA-class</option>
+				<option value="stub">ছোট</option>
+				<option value="start">প্রাথমিক</option>
+				<option value="C">মান সি（C）</option>
+				<option value="B">মান বি（B）</option>
+				<option value="list">তালিকা</option>
+				<option value="disambig">দ্ব্যর্থতা</option>
+				<option value="template">টেমপ্লেট</option>
+				<option value="redirect">পুনঃনির্দেশ</option>
+				<option value="portal">প্রবেশদ্বার</option>
+				<option value="project">প্রকল্প</option>
+				<option value="na">অজানা</option>
 			</select>
-		</div>
-
-		<div id="shortDescriptionWrapper">
-			<label for="shortDescription" class="afch-label">Short description</label>
-			<input type="text" id="shortDescription" class="afch-input afch-textfield" placeholder="British astronomer" value="{{shortDescription}}">
-		</div>
-
-		<div id="stubSorterWrapper" class="hidden">
-			<label class="afch-label" for="stub-sorter-select">Add stub tag</label>
-			<div id="stubSorterContainer"></div>
 		</div>
 
 		{{#hasWikiProjects}}
 		<div id="wikiProjectWrapper">
-			<label for="newWikiProjects" class="afch-label">Add WikiProjects</label>
+			<label for="newWikiProjects" class="afch-label">উইকিপ্রকল্প যোগ করুন</label>
 			<select id="newWikiProjects" class="afch-input" multiple>
 				{{#wikiProjects}}
-				<option value="{{templateName}}" {{#alreadyOnPage}} selected {{/alreadyOnPage}}>{{displayName}}</option>
+				<option value="{{templateName}}">{{displayName}}</option>
 				{{/wikiProjects}}
 			</select>
 		</div>
 		{{/hasWikiProjects}}
 
 		<div id="categoryWrapper">
-			<label for="newCategories" class="afch-label">Add categories</label>
+			<label for="newCategories" class="afch-label">বিষয়শ্রেণী যোগ করুন</label>
 			<select id="newCategories" class="afch-input" multiple>
 				{{#categories}}
 				<option value="{{.}}" selected>{{.}}</option>
@@ -115,63 +106,19 @@
 			</select>
 		</div>
 
-		<div id="isBiographyWrapper">
-			<label for="isBiography" class="afch-label">Is the article a biography?</label>
-			<input type="checkbox" id="isBiography" class="afch-input"/>
-		</div>
-
-		<div id="copyCommentsWrapper">
-			<label for="copyComments" class="afch-label">Copy comments to talk page</label>
-			<input type="checkbox" id="copyComments" class="afch-input"/>
-		</div>
-
-		<div id="bioOptionsWrapper" class="hidden">
-
-			<div id="subjectNameWrapper">
-				<label for="subjectName" class="afch-label">Subject name (last, first)</label>
-				<input type="text" id="subjectName" class="afch-input afch-textfield" placeholder="Magellan, Ferdinand"/>
-			</div>
-
-			<div id="birthYearWrapper">
-				<label for="birthYear" class="afch-label">Year of birth</label>
-				<input type="text" id="birthYear" class="afch-input afch-textfield" placeholder="1901"/>
-			</div>
-
-			<div id="lifeStatusWrapper">
-				<label for="lifeStatus" class="afch-label">Is the subject alive?</label>
-				<select id="lifeStatus" class="afch-input">
-					<option value="unknown" selected>Unknown</option>
-					<option value="living">Living</option>
-					<option value="dead">Dead</option>
-				</select>
-			</div>
-
-			<div id="deathWrapper" class="hidden">
-
-				<div id="deathYearWrapper">
-					<label for="deathYear" class="afch-label">Year of death</label>
-					<input type="text" id="deathYear" class="afch-input afch-textfield" placeholder="1999"/>
-				</div>
-
-			</div>
-
-		</div>
-
 		{{#showPatrolOption}}
 		<div id="patrolPageWrapper">
-			<label for="patrolPage" class="afch-label">Mark page as patrolled</label>
+			<label for="patrolPage" class="afch-label">নিরীক্ষিত বলে চিহ্নিত করুন</label>
 			<input type="checkbox" id="patrolPage" class="afch-input"/>
 		</div>
 		{{/showPatrolOption}}
 
 		<div id="notifyWrapper">
-			<label for="notifyUser" class="afch-label">Notify submitter</label>
+			<label for="notifyUser" class="afch-label">জমাদানকারীকে জানান</label>
 			<input type="checkbox" id="notifyUser" class="afch-input" checked/>
 		</div>
 
-		<div id="afchEditConflict"></div>
-
-		<div id="afchSubmitForm" data-running="Accepting submission..." class="gradient-button accept">Accept &amp; publish</div>
+		<div id="afchSubmitForm" data-running="গ্রহণ করা হচ্ছে..." class="gradient-button accept">গ্রহণ &amp; প্রকাশ</div>
 
 	</div>
 </div>
@@ -179,83 +126,82 @@
 
 <!-- decline -->
 <div class="review-panel decline">
-	<div class="header">Declining...</div>
+	<div class="header">প্রত্যাখ্যান করা হচ্ছে...</div>
 	<div id="afchContent" class="content centered">
 
 		<fieldset id="declineRejectWrapper" class="radioContainer afch-input" name="declineReject">
 			<input type="radio" id="declineRejectDecline" name="declineReject" value="decline" checked />
-			<label for="declineRejectDecline"><b>Decline</b> (for later improvement &amp; resubmission)</label>
+			<label for="declineRejectDecline"><b>মানোন্নয়ন প্রয়োজন</b> (ছোট জমা, এবং উন্নতির প্রয়োজন আছে)</label>
 			&emsp;
 			<input type="radio" id="declineRejectReject" name="declineReject" value="reject" />
-			<label for="declineRejectReject"><b>Reject</b> (unsuitable topic; no option to resubmit)</label>
+			<label for="declineRejectReject"><b>পুনঃজমা প্রত্যাখ্যান</b> (অনুপযুক্ত বিষয়, এবং বারবার জমা দেওয়ার পরও কোনো উন্নতি দেখা যায়নি)</label>
 		</fieldset>
 
 		<div id="declineReasonWrapper">
-			<select id="declineReason" class="afch-input text-left" multiple="multiple">
+			<select id="declineReason" class="afch-input text-left" multiple="multiple" data-placeholder="অনুগ্রহ করে ১-২ টি বিকল্প নির্বাচন করুন">
 				<option value=""></option>
-				<optgroup label="Notability">
-					<option value="neo">neo - Submission is about a neologism not yet shown to meet notability guidelines</option>
-					<option value="web">web - Submission is about web content not yet shown to meet notability guidelines</option>
-					<option value="prof">prof - Submission is about a professor not yet shown to meet notability guidelines</option>
-					<option value="athlete">athlete - Submission is about an athlete not yet shown to meet notability guidelines</option>
-					<option value="music">music - Submission is about a musician or musical work not yet shown to meet notability guidelines</option>
-					<option value="film">film - Submission is about a film not yet shown to meet notability guidelines</option>
-					<option value="book">book - Submission is about a book not yet shown to meet notability guidelines</option>
-					<option value="event">event - Submission is about an event not yet shown to meet notability guidelines</option>
-					<option value="corp">corp - Submission is about a company or organization not yet shown to meet notability guidelines</option>
-					<option value="bio">bio - Submission is about a person not yet shown to meet notability guidelines</option>
-					<option value="nn">nn - Submission is about a topic not yet shown to meet general notability guidelines (be more specific if possible)</option>
+				<optgroup label="অন্যান্য">
+					<option value="reason">নিজস্ব - নিজের বিবেচনা</option>
 				</optgroup>
-				<optgroup label="Invalid submissions">
-					<option value="blank">blank - Submission is blank</option>
-					<option value="lang">lang - Submission is not in English</option>
-					<option value="test">test - Submission appears to be a test edit</option>
-					<option value="redirect">redirect - Submission is a redirect request</option>
+				<optgroup label="অনুপযুক্ত বিষয়">
+					<option value="A1">নি১ - নিবন্ধের বিষয়বস্তু যাচাই করার মতো যথেষ্ট পরিমাণ লেখা নেই।</option>
+					<option value="A2">বিষয়বস্তু শুধুমাত্র বহিঃসংযোগ, তথ্যসূত্র, বই উৎস, বিষয়শ্রেণী, টেমপ্লেট, এবং আন্ত-ভাষা সংযোগ এন্ট্রি (দ্ব্যর্থতা নিরসন পাতা, পুনঃনির্দেশ ব্যতীত) অন্তর্ভুক্ত）</option>
+					<option value="G2">স১/স২ - কোনো প্রকৃত বিষয়বস্তু মনে হচ্ছেনা, বা পরীক্ষামূলক পাতা</option>
 				</optgroup>
-				<optgroup label="BLP &amp; vandalism">
-					<option value="van">van - Submission is vandalism, a negative unsourced BLP, or an attack page</option>
-					<option value="ilc">ilc - Submission is a BLP that does not meet minimum inline citation requirements</option>
-					<option value="blp">blp - BLP contains unsourced, possibly defamatory claims (AGF and wait for sources)</option>
+				<optgroup label="উল্লেখযোগ্যতা">
+					<option value="N">উ - সাধারণ উল্লেখযোগ্যতা মানদণ্ড পূরণ করেনা</option>
+					<option value="book">বই - উল্লেখযোগ্য বই নয়</option>
+					<option value="bio">জীবনী - উল্লেখযোগ্য ব্যক্তি নয়</option>
+					<option value="geo">ভূগোল - উল্লেখযোগ্য ভৌগোলিক উপাদান নয়</option>
+					<option value="invalid">অবৈধ - উৎস একটি বৈধ ভূমিকা গঠন করে না</option>
 				</optgroup>
-				<optgroup label="Submission content">
-					<option value="cv">cv - Submission is a copyright violation</option>
-					<option value="v">v - Submission is improperly sourced</option>
-					<option value="not">not - Submission fails [[Wikipedia:What Wikipedia is not]]</option>
-					<option value="news">news - Submission appears to be a news story of a single event</option>
-					<option value="dict">dict - Submission is a dictionary definition</option>
-					<option value="plot">plot - Submission consists mostly of a plot summary</option>
-					<option value="joke">joke - Submission appears to be a joke or hoax</option>
+				<optgroup label="অপর্যাপ্ত উৎস">
+					<option value="primary">প্রাথমিক - প্রাথমিক উৎসের উপর নির্ভর</option>
+					<option value="OR">গবেষণা - স্পষ্টতই প্রণেতার দ্বারা তৈরি, এবং তাৎপর্যপূর্ণ প্রচারের কোনও প্রমাণ নেই</option>
+					<option value="no footnotes">পাদটীকা নেই - লেখায় কোনো পাদটীকা নেই</option>
+					<option value="unreferenced">উৎসহীন - কোনো তথ্যসূত্র নেই</option>
+					<option value="rs">নিসূ - নির্ভরযোগ্য সূত্রের অভাব</option>
 				</optgroup>
-				<optgroup label="Prose issues">
-					<option value="essay">essay - Submission reads like an essay</option>
-					<option value="npov">npov - Submission is not written in a formal, neutral encyclopedic tone</option>
-					<option value="adv">adv - Submission reads like an advertisement</option>
-				</optgroup>
-				<optgroup label="Duplicate articles">
-					<option value="exists">exists - Submission is duplicated by another article already in mainspace</option>
-					<option value="dup">dup - Submission is a duplicate of another existing submission</option>
-				</optgroup>
-				<optgroup label="Other">
-					<option value="reason">custom - Enter decline reason in the box below</option>
-					<option value="context">context - Submission provides insufficient context</option>
-					<option value="mergeto">mergeto - Submission should be merged into an existing article</option>
+				<optgroup label="বিষয়বস্তু">
+					<option value="cv">cv - সন্দেহজনক কপিরাইট লঙ্ঘন (রিপোর্ট করতে অনুগ্রহ করে টুইঙ্কল ব্যবহার করুন)</option>
+					<option value="lang">বাংলা নয় - বাংলা ভাষায় লিখা নয়</option>
+					<option value="A6">স৬ - অনুবাদ ছাড়াই অন্যান্য উইকিপিডিয়া ভাষার সংস্করণ থেকে অনুলিপি করা হয়েছে</option>
+					<option value="npov">npov - নিরপেক্ষভাবে লিখিত নয়</option>
+					<option value="G11">স১১ - দ্ব্যর্থহীন বিজ্ঞাপন</option>
+					<option value="coi">coi - দ্ব্যর্থহীন স্বার্থের সংঘাত</option>
+					<option value="merge">একত্রিত - বিদ্যমান নিবন্ধে একত্রিত করুন</option>
 				</optgroup>
 			</select>
+		<div id="viewDeclineReasons" align="right" style="font-size:12px;">
+			<a href="https://bn.wikipedia.org/wiki/Template:AFC_submission/comments">কারণ দেখুন বা সম্পাদনা করুন</a>
+		</div>
 
 			<div id="previewWrapper">
-				<a id="previewTrigger" class="link" role="button">(preview)</a>
+				<a id="previewTrigger" class="link" role="button">(পূর্বরূপ দেখুন)</a>
 				<div id="previewContainer"></div>
 			</div>
 		</div>
 
 		<div id="rejectReasonWrapper" class="hidden">
-			<select id="rejectReason" class="afch-input text-left" multiple="multiple">
+			<select id="rejectReason" class="afch-input text-left" multiple="multiple" data-placeholder="অনুগ্রহ করে ১-২ টি বিকল্প নির্বাচন করুন">
 				<option value=""></option>
-				<option value="n">n - Topic is not notable</option>
-				<option value="e">e - Topic is contrary to the purpose of Wikipedia</option>
+				<optgroup label="উইকিপিডিয়া কি নয়">
+				<option value="neo">dict - যে নিবন্ধগুলো ছোট বা এখনও সাধারণ উল্লেখযোগ্যতা নির্দেশিকা পূরণ করে না</option>
+				<option value="OR">OR - বেশিরভাগ বিষয়ই মূল গবেষণা এবং দ্বিতীয় উৎস থেকে যাচাই করা যাচ্ছে না</option>
+				<option value="guide">guide - ম্যানুয়াল, কৌশল, পাঠ্যপুস্তক</option>
+				<option value="voy">voy - আকর্ষণ, দোকান ইত্যাদির বিস্তারিত তথ্য সহ ভ্রমণ গাইড</option>
+			</optgroup>
+				<optgroup label="অন্যান্য সাধারণ">
+				<option value="N">N - বিষয়টি কখনোই আকর্ষণীয় বলে প্রমাণিত হয়নি</option>
+				<option value="G3">স৩ - স্পষ্টত ধ্বংসপ্রবণতা, স্পষ্টত প্রতারণা, ভুল তথ্য, ব্যক্তিগত আক্রমণ ইত্যাদি সহ কিন্তু সীমাবদ্ধ নয়</option>
+				<option value="G12">G12 - উত্স উদ্ধৃত না করে, একটি নেতিবাচক দৃষ্টিকোণে লেখা একটি জীবিত ব্যক্তির জীবনী</option>
+				<option value="spa">SPA - দ্ব্যর্থহীন বিজ্ঞাপন，বারবার জমার পরও কোনো উন্নতি নেই</option>
+				<option value="rs">rs - নির্ভরযোগ্য সূত্র কখনই পাওয়া যায়নি</option>
 			</select>
+		<div id="viewRejectReasons" align="right" style="font-size:12px;">
+			<a href="https://bn.wikipedia.org/wiki/Template:AFC_submission/reject reasons">কারণ দেখুন বা সম্পাদনা করুন</a>
 		</div>
-
+		</div>
 
 		<div id="declineInputWrapper">
 			<div id="textfieldWrapper" class="afch-option hidden">
@@ -269,46 +215,40 @@
 			</div>
 
 			<div id="cvUrlWrapper" class="afch-option hidden">
-				<label for="cvUrlTextarea" class="afch-label">Original URLs (one per line)</label>
+				<label for="cvUrlTextarea" class="afch-label">লঙ্ঘনের উৎসের সংযোগ (প্রতি লাইনে একটি)</label>
 				<textarea id="cvUrlTextarea" class="afch-input afch-textfield afch-textarea"
-					placeholder="Enter original URLs here, one per line."
+					placeholder="লঙ্ঘনের উৎসের সংযোগ (প্রতি লাইনে একটি)"
 					cols="110" rows="3"></textarea>
 			</div>
 
-			<textarea id="declineTextarea" class="afch-input afch-textfield afch-textarea hidden"
-				placeholder="Elaborate on your decline reason here using wikicode syntax."
+			<textarea id="declineTextarea" class="afch-input afch-textfield afch-textarea"
+				placeholder="প্রয়োজনে উইকি সিনট্যাক্স ব্যবহার করে এখানে অতিরিক্ত মন্তব্য যোগ করুন"
 				cols="100" rows="5"></textarea>
-
-			<div id="declineInputPreview"></div>
 
 			<div id="csdWrapper" class="afch-option hidden">
 				<input type="checkbox" id="csdSubmission" class="afch-input"/>
-				<label for="csdSubmission" class="afch-label">Nominate the submission for speedy deletion</label>
+				<label for="csdSubmission" class="afch-label">দ্রুত অপসারণ প্রস্তাবনা</label>
 			</div>
 		</div>
 
 		<div id="rejectInputWrapper" class="hidden">
-			<textarea id="rejectTextarea" class="afch-input afch-textfield afch-textarea hidden"
-				placeholder="Elaborate on your reject reason here using wikicode syntax."
+			<textarea id="rejectTextarea" class="afch-input afch-textfield afch-textarea"
+				placeholder="প্রয়োজনে উইকি সিনট্যাক্স ব্যবহার করে এখানে অতিরিক্ত মন্তব্য যোগ করুন"
 				cols="100" rows="5"></textarea>
-
-			<div id="rejectInputPreview"></div>
 		</div>
 
 		<div id="notifyWrapper" class="hidden">
 			<div class="afch-option">
 				<input type="checkbox" id="notifyUser" class="afch-input" checked/>
-				<label for="notifyUser" class="afch-label">Notify submitter</label>
+				<label for="notifyUser" class="afch-label">জমাদানকারীকে অবহিত করুন</label>
 			</div>
 			<div class="afch-option">
-				<input type="checkbox" id="inviteToTeahouse" class="afch-input" checked/>
-				<label for="inviteToTeahouse" class="afch-label">Invite submitter to Teahouse <small>(if they haven't been invited yet)</small></label>
+				<input type="checkbox" id="inviteToTeahouse" class="afch-input" />
+				<label for="inviteToTeahouse" class="afch-label">সাহায্যের জন্য পারস্পরিক সাহায্য বা তাত্ক্ষণিক আলোচনায় আমন্ত্রণ জানান <small>(যারা ইতিমধ্যে এটি পেয়েছেন তাদের জন্য অবৈধ)</small></label>
 			</div>
 		</div>
 
-		<div id="afchEditConflict"></div>
-
-		<div id="afchSubmitForm" data-running="Declining submission..." class="gradient-button button-centered decline hidden">Decline submission</div>
+		<div id="afchSubmitForm" data-running="খসড়া প্রত্যাখ্যান..." class="gradient-button button-centered decline hidden">খসড়া প্রত্যাখ্যান</div>
 
 	</div>
 </div>
@@ -316,23 +256,19 @@
 
 <!-- comment -->
 <div class="review-panel comment">
-	<div class="header">Commenting...</div>
+	<div class="header">মন্তব্য...</div>
 	<div id="afchContent" class="content centered">
 
 		<textarea id="commentText" class="afch-input afch-textfield afch-textarea"
-			placeholder="Enter your comment about the submission using wikicode syntax. Your signature will be added automatically."
+			placeholder="জমা দেওয়া খসড়াতে আপনার মন্তব্য লিখুন (উইকি সিনট্যাক্স ব্যবহার করা যেতে পারে)। স্বাক্ষর স্বয়ংক্রিয়ভাবে যোগ করা হবে।"
 			cols="100" rows="5"></textarea>
 
-		<div id="commentPreview"></div>
+	<div class="afch-option">
+		<input type="checkbox" id="notifyUser" class="afch-input" {{#notifyByDefault}}checked{{/notifyByDefault}} />
+		<label for="notifyUser" class="afch-label">জমাদানকারীকে অবহিত করুন</label>
+	</div>
 
-		<div class="afch-option">
-			<input type="checkbox" id="notifyUser" class="afch-input" {{#notifyByDefault}}checked{{/notifyByDefault}} />
-			<label for="notifyUser" class="afch-label">Notify submitter</label>
-		</div>
-
-		<div id="afchEditConflict"></div>
-
-		<div id="afchSubmitForm" data-running="Commenting on submission..." class="gradient-button button-centered comment">Post comment</div>
+		<div id="afchSubmitForm" data-running="পর্যালোচনা জমা দেওয়া হচ্ছে..." class="gradient-button button-centered comment">পর্যালোচনা জমা দিন</div>
 
 	</div>
 </div>
@@ -340,46 +276,43 @@
 
 <!-- submit -->
 <div class="review-panel submit">
-	<div class="header">Submitting...</div>
+	<div class="header">জমা দেওয়া হচ্ছে...</div>
 	<div id="afchContent" class="content centered">
-		<label for="submitType" class="afch-label">Submit as</label>
+		<label for="submitType" class="afch-label">পরিচয় জমা দিন</label>
 		<select id="submitType" class="afch-input">
 			{{#customSubmitters}}
-			<option value="{{name}}" {{#selected}}selected{{/selected}}>{{description}}</option>
+			<option value="{{name}}" {{#selected}}নির্বাচিত{{/selected}}>{{description}}</option>
 			{{/customSubmitters}}
-			<option value="creator">Page creator</option>
-			<option value="self">Yourself</option>
-			<option value="other">Someone else</option>
+			<option value="creator">পাতা প্রণেতা</option>
+			<option value="self">আপনি</option>
+			<option value="other">অন্যান্য</option>
 		</select>
 
 		<div id="submitterNameWrapper" class="hidden">
-			<input type="text" id="submitterName" class="afch-input afch-textfield" placeholder="Username" />
+			<input type="text" id="submitterName" class="afch-input afch-textfield" placeholder="ব্যবহারকারী নাম" />
 			<div id="submitterNameStatus" class="error"></div>
 		</div>
 
-		<div id="afchEditConflict"></div>
-
-		<div id="afchSubmitForm" data-running="Submitting..." class="gradient-button button-centered submit">Submit</div>
+		<div id="afchSubmitForm" data-running="জমা দেওয়া হচ্ছে..." class="gradient-button button-centered submit">জমা দিন</div>
 
 	</div>
 </div>
 <!-- /submit -->
 
-<!-- postpone-g13 -->
-<div class="review-panel postpone-g13">
-	<div class="header">Postponing...</div>
+<!-- postpone-o7 -->
+<div class="review-panel postpone-o7">
+	<div class="header">স্থগিত করা হচ্ছে...</div>
 	<div id="afchContent" class="content centered">
 		<textarea id="commentText" class="afch-input afch-textfield afch-textarea"
-			placeholder="Enter your rationale for postponing deletion, which will be added to the submission as a new comment."
+			placeholder="অপসারণ স্থগিত করার জন্য একটি কারণ লিখুন, এটি একটি নতুন মন্তব্য হিসাবে খসড়ায় যোগ করা হবে"
 			cols="100" rows="5"></textarea>
 
-		<div id="afchEditConflict"></div>
-
-		<div id="afchSubmitForm" data-running="Postponing..." class="gradient-button button-centered postpone-g13">
-			Postpone deletion
+		<div id="afchSubmitForm" data-running="Postponing..." class="gradient-button button-centered postpone-o7">
+			অপসারণ স্থগিত করুন
 		</div>
+
 	</div>
 </div>
-<!-- /postpone-g13 -->
+<!-- /postpone-o7 -->
 
-// </nowiki>
+//</nowiki>
