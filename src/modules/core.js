@@ -1,4 +1,4 @@
-/* https://github.com/Tanbiruzzaman/afch-bnwp, translated and adapted from
+/* Translated and adapted from
  * https://github.com/WPAFC/afch-rewrite */
 
 var Hogan = {};
