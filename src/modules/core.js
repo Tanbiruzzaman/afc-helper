@@ -642,7 +642,7 @@ var Hogan = {};
 					// Require users to be on whitelist to use the script
 					whitelistRequired: true,
 					// Name of the whitelist page for reviewers
-					whitelistTitle: 'উইকিপিডিয়া:উইকিপ্রকল্প নিবন্ধ সৃষ্টিকরণ/অংশগ্রহণকারী'
+					whitelistTitle: 'উইকিপিডিয়া:নিবন্ধ সৃষ্টিকরণ/অংশগ্রহণকারী'
 				},
 				AFCH.consts );
 
@@ -696,7 +696,7 @@ var Hogan = {};
 									change: 'gadget-afchelper=0'
 								} )
 								.done( function ( data ) {
-									mw.notify( 'AFCHসফলভাবে নিষ্ক্রিয় করা হয়েছে'  );
+									mw.notify( 'AFCH সফলভাবে নিষ্ক্রিয় করা হয়েছে'  );
 								} );
 						} ) )
 					.append( '. ' );
@@ -707,7 +707,7 @@ var Hogan = {};
 						$howToDisable = $( '<span>' )
 							.append(
 								'আপনি যদি সহায়ক স্ক্রিপ্ট স্বয়ংক্রিয়ভাবে নিষ্ক্রিয় করতে চান' +
-									'আপনার' )
+									'তবে আপনার' )
 							.append( AFCH.makeLinkElementToPage(
 								'Special:MyPage/common.js', 'common.js' ) )
 							.append( 'বা' )
@@ -721,10 +721,10 @@ var Hogan = {};
 						$( '<div>' )
 							.append(
 								'AFCH লোড করা যায়নি，"' + user +
-					'"তালিকাভুক্ত নয়' )
+					'"অনুমোদিত ব্যবহারকারী নয়' )
 							.append( AFCH.makeLinkElementToPage( whitelist.rawTitle ) )
 							.append( 
-								'সেখানে আপনি স্ক্রিপ্ট ব্যবহারের অনুমতির জন্য আবেদন করতে পারেন।' )
+								'স্ক্রিপ্ট ব্যবহারের অনুমতির জন্য আবেদন করুন।' )
 							.append( $howToDisable )
 							.append( 
 								'আপনার কোন প্রশ্ন বা উদ্বেগ থাকলে，দয়া করে' )
@@ -1210,7 +1210,7 @@ var Hogan = {};
 
 							if ( data.edit.hasOwnProperty( 'nochange' ) ) {
 								status.update(
-									'অধিকার নেই$1কোনো পরিবর্তন করুন' );
+									'অধিকার নেই $1কোনো পরিবর্তন করুন' );
 								return;
 							}
 
@@ -1221,19 +1221,19 @@ var Hogan = {};
 								'(পার্থক্য)' )
 								.addClass( 'text-smaller' );
 
-							status.update( 'সংরক্ষিত$1পরিবর্তন' + AFCH.jQueryToHtml( $diffLink ) );
+							status.update( 'সংরক্ষিত $1পরিবর্তন' + AFCH.jQueryToHtml( $diffLink ) );
 						} else {
 							deferred.reject( data );
 							// FIXME: get detailed error info from API result??
 							status.update(
-								'রাখুন$1পরিবর্তন ব্যর্থ হয়েছে：' +
+								'রাখুন $1পরিবর্তন ব্যর্থ হয়েছে：' +
 					JSON.stringify( data ) );
 						}
 					} )
 					.fail( function ( err ) {
 						deferred.reject( err );
 						status.update(
-							'রাখুন$1পরিবর্তন ব্যর্থ হয়েছে：' +
+							'রাখুন $1পরিবর্তন ব্যর্থ হয়েছে：' +
 				JSON.stringify( err ) );
 					} );
 
@@ -1266,7 +1266,7 @@ var Hogan = {};
 
 				if ( !hide ) {
 					status = new AFCH.status.Element(
-						'স্থানান্তর$1হচ্ছে$2...', {
+						'স্থানান্তর $1হচ্ছে$2...', {
 							$1: AFCH.makeLinkElementToPage( oldTitle ),
 							$2: AFCH.makeLinkElementToPage( newTitle )
 						} );
@@ -1293,19 +1293,19 @@ var Hogan = {};
 					.postWithToken( 'edit', request ) // Move token === edit token
 					.done( function ( data ) {
 						if ( data && data.move ) {
-							status.update( 'স্থানান্তর$1হচ্ছে$2' );
+							status.update( 'স্থানান্তর $1হচ্ছে$2' );
 							deferred.resolve( data.move );
 						} else {
 							// FIXME: get detailed error info from API result??
 							status.update(
-								'স্থানান্তর$1হচ্ছে$2ব্যর্থ：' +
+								'স্থানান্তর $1হচ্ছে $2ব্যর্থ：' +
 					JSON.stringify( data.error ) );
 							deferred.reject( data.error );
 						}
 					} )
 					.fail( function ( err ) {
 						status.update(
-							'স্থানান্তর$1হচ্ছে$2ব্যর্থ：' +
+							'স্থানান্তর $1হচ্ছে $2ব্যর্থ：' +
 				JSON.stringify( err ) );
 						deferred.reject( err );
 					} );
@@ -1360,7 +1360,7 @@ var Hogan = {};
 								userTalkPage.edit( {
 									contents: ( exists ? '' : '{{Talk header}}' ) + '\n\n' +
 						options.message,
-									summary: options.summary || 'ব্যবহারকারীকে জানান',
+									summary: options.summary || 'ব্যবহারকারীকে জানানো হলো',
 									mode: 'appendtext',
 									statusText: 'জানান',
 									hide: options.hide
@@ -1422,7 +1422,7 @@ var Hogan = {};
 
 					if ( options.usersNotified && options.usersNotified.length ) {
 						appendText +=
-				'; জানান{{user|1=' + options.usersNotified.shift() + '}}';
+				'; জানান {{user|1=' + options.usersNotified.shift() + '}}';
 
 						$.each( options.usersNotified, function ( _, user ) {
 							appendText += ', {{user|1=' + user + '}}';
@@ -1464,7 +1464,7 @@ var Hogan = {};
 				var request,
 					deferred = $.Deferred(),
 					status = new AFCH.status.Element(
-						'আদেশে$1পরীক্ষিত বলে চিহ্নিত করুন...', {
+						'আদেশে $1পরীক্ষিত বলে চিহ্নিত করুন...', {
 							$1: AFCH.makeLinkElementToPage( title ) || 'page with id #' + rcid
 						} );
 
@@ -1483,14 +1483,14 @@ var Hogan = {};
 							deferred.resolve( data );
 						} else {
 							status.update(
-								'হবে$1পরীক্ষিত বলে চিহ্নিত ব্যর্থ：' +
+								'হবে $1পরীক্ষিত বলে চিহ্নিত ব্যর্থ：' +
 					JSON.stringify( data.patrol ) );
 							deferred.reject( data );
 						}
 					} )
 					.fail( function ( data ) {
 						status.update(
-							'হবে$1পরীক্ষিত বলে চিহ্নিত ব্যর্থ：' +
+							'হবে $1পরীক্ষিত বলে চিহ্নিত ব্যর্থ：' +
 				JSON.stringify( data ) );
 						deferred.reject( data );
 					} );
@@ -1847,7 +1847,7 @@ var Hogan = {};
 				AFCH.userData.set( 'preferences', this.prefStore ).done( function () {
 					// When we're done, close the dialog and notify the user
 					prefs.$dialog.dialog( 'close' );
-					mw.notify( 'AFCH: প্যারামিতি সেটিং আইটেম সফলভাবে সংরক্ষিত! বর্তমান পাতাটি পুনঃলোড হলে বা অন্যান্য পাতাগুলি ব্রাউজ করা হলে এগুলি কার্যকর হবে৷' );
+					mw.notify( 'AFCH: প্যারামিতি সেটিং আইটেম সফলভাবে সংরক্ষিত! বর্তমান পাতাটি পুনঃলোড হলে বা অন্য কোনো পাতা ব্রাউজ করা হলে এগুলি কার্যকর হবে৷' );
 				} );
 			};
 
@@ -1859,7 +1859,7 @@ var Hogan = {};
 	 */
 			this.initLink = function ( $element, linkText ) {
 				$( '<span>' )
-					.text( linkText || 'সেটিংস আপডেট করুন' )
+					.text( linkText || 'পছন্দ হালনাগাদ করুন' )
 					.addClass( 'preferences-link link' )
 					.appendTo( $element )
 					.click( function () {
@@ -2117,7 +2117,7 @@ var Hogan = {};
 
 			if ( elapsed < msPerMinute ) {
 				amount = Math.round( elapsed / 1000 );
-				unit = 'দ্বিতীয়';
+				unit = 'সেকেন্ড';
 			} else if ( elapsed < msPerHour ) {
 				amount = Math.round( elapsed / msPerMinute );
 				unit = 'মিনিট';
@@ -2135,7 +2135,7 @@ var Hogan = {};
 				unit = 'বছর';
 			}
 
-			return [ amount, unit, 'আগে' ].join( '' );
+			return [ amount, unit, ' আগে' ].join( '' );
 		},
 
 		/**
@@ -2188,7 +2188,7 @@ var Hogan = {};
 
 			exp = new RegExp(
 				'(\\d{1,2}):(\\d{2}), (\\d{1,2}) ' +
-			'(1মাস|2মাস|3মাস|4মাস|5মাস|6মাস|7মাস|8মাস|9মাস|10মাস|11মাস|12মাস) ' +
+			'(1 মাস|2 মাস|3 মাস|4 মাস|5 মাস|6 মাস|7 মাস|8 মাস|9 মাস|10 মাস|11 মাস|12 মাস) ' +
 			'(\\d{4}) \\(UTC\\)',
 				'g' );
 
