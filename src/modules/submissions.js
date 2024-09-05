@@ -1,7 +1,3 @@
-/* https://github.com/Tanbiruzzaman/afch-bnwp, translated and adapted from
- * https://github.com/WPAFC/afch-rewrite */
-//<nowiki>
-
 ( function ( AFCH, $, mw ) {
 	var $afchLaunchLink, $afch, $afchWrapper, afchPage, afchSubmission, afchViews,
 		afchViewer;
