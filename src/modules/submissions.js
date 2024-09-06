@@ -313,10 +313,10 @@
 	};
 
 	/**
- * Checks if submission is O7 eligible
+ * Checks if submission is G13 eligible
  * @return {$.Deferred} Resolves to bool if submission is eligible
  */
-	AFCH.Submission.prototype.isO7Eligible = function () {
+	AFCH.Submission.prototype.isG13Eligible = function () {
 		var deferred = $.Deferred();
 
 		// Submission must not currently be submitted
@@ -498,7 +498,7 @@
 			text = text.replace( /\[\[:Category:/gi, '[[Category:' );
 			text = text.replace( /\{\{(tl|tlx|tlg)\|(.*?)\}\}/ig, '{{$2}}' );
 
-			// Strip the AFC g13 postponement template
+			// Strip the AFC G13 postponement template
 			text = text.replace( /\{\{AfC postpone G13(?:\|\d*)?\}\}\n*/gi, '' );
 
 			// Add to the list of comments to remove
@@ -854,15 +854,15 @@
 				}
 			} );
 
-			// Get g13 eligibility and when known, display relevant buttons...
+			// Get G13 eligibility and when known, display relevant buttons...
 			// but don't hold up the rest of the loading to do so
-			submission.isg13Eligible().done( function ( eligible ) {
+			submission.isG13Eligible().done( function ( eligible ) {
 				$afch.find( '.g13-related' ).toggleClass( 'hidden', !eligible );
-				$afch.find( '#afchg13' ).click( function () {
-					handleg13();
+				$afch.find( '#afchG13' ).click( function () {
+					handleG13();
 				} );
-				$afch.find( '#afchPostponeg13' ).click( function () {
-					spinnerAndRun( showPostponeg13Options );
+				$afch.find( '#afchPostponeG13' ).click( function () {
+					spinnerAndRun( showPostponeG13Options );
 				} );
 			} );
 		} );
@@ -2004,9 +2004,9 @@
 		addFormSubmitHandler( handleSubmit );
 	}
 
-	function showPostponeg13Options() {
+	function showPostponeG13Options() {
 		loadView( 'postpone-g13', {} );
-		addFormSubmitHandler( handlePostponeg13 );
+		addFormSubmitHandler( handlePostponeG13 );
 	}
 
 	// These functions actually perform a given action using data passed
@@ -2461,7 +2461,7 @@
     } );
 }
 
-	function handleg13() {
+	function handleG13() {
 		// We start getting the creator now (for notification later) because ajax is
 		// radical and handles simultaneous requests, but we don't let it delay
 		// tagging
@@ -2476,7 +2476,7 @@
 				var text = new AFCH.Text( rawText );
 
 				// Add the deletion tag and clean up for good measure
-				text.prepend('{{delete|g13' + '}}\n' );
+				text.prepend('{{delete|G13' + '}}\n' );
 				text.cleanUp();
 
 				afchPage.edit( {
@@ -2501,7 +2501,7 @@
 							message:
 					AFCH.msg.get( 'g13-submission', { $1: AFCH.consts.pagename } ),
 							summary: 'বিজ্ঞপ্তি：[[' + AFCH.consts.pagename +
-					']] দ্রুত অপসারণ প্রস্তাবনা（[[WP:g13|CSD G13]]）'
+					']]-এর দ্রুত অপসারণ প্রস্তাবনা（[[WP:G13|CSD G13]]）'
 						} );
 					} );
 
@@ -2516,7 +2516,7 @@
 			} );
 	}
 
-	function handlePostponeg13( data ) {
+	function handlePostponeG13( data ) {
 		var postponeCode,
 			text = data.afchText, rawText = text.get(),
 			postponeRegex = /\{\{AfC postpone G13\s*(?:\|\s*(\d*)\s*)?\}\}/ig;
