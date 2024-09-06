@@ -498,8 +498,8 @@
 			text = text.replace( /\[\[:Category:/gi, '[[Category:' );
 			text = text.replace( /\{\{(tl|tlx|tlg)\|(.*?)\}\}/ig, '{{$2}}' );
 
-			// Strip the AFC O7 postponement template
-			text = text.replace( /\{\{AfC postpone O7(?:\|\d*)?\}\}\n*/gi, '' );
+			// Strip the AFC g13 postponement template
+			text = text.replace( /\{\{AfC postpone G13(?:\|\d*)?\}\}\n*/gi, '' );
 
 			// Add to the list of comments to remove
 			$.merge( commentsToRemove, [
@@ -526,7 +526,7 @@
 
 		// Remove sandbox templates
 		text = text.replace(
-			/\{\{(userspacedraft|userspace draft|user sandbox|ব্যবহারকারী খেলাঘর|ব্যবহারকারী খেলাঘর|draft copyvio|৭দিনের খসড়া|7D draft|Draft|খসড়া|Please leave this line alone \(sandbox heading\))(?:\{\{[^{}]*\}\}|[^}{])*\}\}/ig,
+			/\{\{(userspacedraft|userspace draft|user sandbox|ব্যবহারকারী খেলাঘর|ব্যবহারকারীর খেলাঘর|draft copyvio|৭দিনের খসড়া|7D draft|Draft|খসড়া|Please leave this line alone \(sandbox heading\))(?:\{\{[^{}]*\}\}|[^}{])*\}\}/ig,
 			'' );
 
 		// Remove html comments (<!--) that surround categories
@@ -557,7 +557,7 @@
 		// elsewhere?
 		function convertExternalLinksToWikilinks( text ) {
 			var linkRegex =
-			/\[{1,2}(?:https?:)?\/\/(?:en.wikipedia.org\/wiki|enwp.org)\/([^\s\|\]\[]+)(?:\s|\|)?((?:\[\[[^\[\]]*\]\]|[^\]\[])*)\]{1,2}/ig,
+			/\[{1,2}(?:https?:)?\/\/(?:bn.wikipedia.org\/wiki|bnwp.org)\/([^\s\|\]\[]+)(?:\s|\|)?((?:\[\[[^\[\]]*\]\]|[^\]\[])*)\]{1,2}/ig,
 				linkMatch = linkRegex.exec( text ), title, displayTitle, newLink;
 
 			while ( linkMatch ) {
@@ -819,7 +819,7 @@
 			// $afch.find( 'span.feedback-wrapper' ), '[your topic here]',
 			// 'মতামত' );
 			AFCH.preferences.initLink(
-				$afch.find( 'span.preferences-wrapper' ), 'সেট আপ' );
+				$afch.find( 'span.preferences-wrapper' ), 'পছন্দসমূহ' );
 
 			// Set up click handlers
 			$afch.find( '#afchAccept' ).click( function () {
@@ -854,15 +854,15 @@
 				}
 			} );
 
-			// Get O7 eligibility and when known, display relevant buttons...
+			// Get g13 eligibility and when known, display relevant buttons...
 			// but don't hold up the rest of the loading to do so
-			submission.isO7Eligible().done( function ( eligible ) {
-				$afch.find( '.o7-related' ).toggleClass( 'hidden', !eligible );
-				$afch.find( '#afchO7' ).click( function () {
-					handleO7();
+			submission.isg13Eligible().done( function ( eligible ) {
+				$afch.find( '.g13-related' ).toggleClass( 'hidden', !eligible );
+				$afch.find( '#afchg13' ).click( function () {
+					handleg13();
 				} );
-				$afch.find( '#afchPostponeO7' ).click( function () {
-					spinnerAndRun( showPostponeO7Options );
+				$afch.find( '#afchPostponeg13' ).click( function () {
+					spinnerAndRun( showPostponeg13Options );
 				} );
 			} );
 		} );
@@ -945,7 +945,7 @@
 				// <ref>1<ref> instead of <ref>1</ref> detection
 				if ( malformedRefs.length ) {
 					addWarning(
-						'পৃষ্ঠাটিতে ফর্ম্যাটিং ত্রুটি রয়েছে<ref>চিহ্ন',
+						'পাতাটিতে বিন্যাস ত্রুটি রয়েছে <ref> চিহ্ন',
 						'（বিস্তারিত চেক করুন）', function () {
 							var $toggleLink = $( this ).addClass( 'malformed-refs-toggle' ),
 								$warningDiv = $( this ).parent();
@@ -980,7 +980,7 @@
 
 				// <ref> without {{সূত্র তালিকা}}
 				if ( refBeginMatches.length && !hasReflist ) {
-					addWarning( 'পাতাটিতে<ref>ট্যাগ রয়েছে, কিন্তু কোনো {{সূত্র তালিকা}} নেই，আপনি সব সূত্র দেখতে সক্ষম নাও হতে পারেন' );
+					addWarning( 'পাতাটিতে <ref> ট্যাগ রয়েছে, কিন্তু কোনো {{সূত্র তালিকা}} নেই，আপনি সব সূত্র দেখতে সক্ষম নাও হতে পারেন' );
 				}
 
 				deferred.resolve();
@@ -1066,9 +1066,9 @@
 				isOwnReview = afchSubmission.params.reviewer === AFCH.consts.user;
 
 				if ( isOwnReview ) {
-					reviewer = 'আপনি';
+					reviewer = 'আপনি নিজে';
 				} else {
-					reviewer = afchSubmission.params.reviewer || 'অন্যরা';
+					reviewer = afchSubmission.params.reviewer || 'অন্য ব্যবহারকারী';
 				}
 
 				addWarning(
@@ -1104,9 +1104,9 @@
 				if ( numberOfComments ) {
 					addWarning(
 						String(
-							'পাতাটিতে রয়েছে' +
+							'পাতাটিতে' +
 				( oneComment ? '' : 'একাধিক' ) +
-				'এইচটিএমএল মন্তব্যটি ৩০বাইটের চেয়েও বড়' +
+				'৩০বাইটের চেয়েও বড় এইচটিএমএল মন্তব্য রয়েছে' +
 				( oneComment ? '' : '' ) ),
 						'（টীকা বিষয়বস্তু দেখুন）' +
 				( oneComment ? '' : '' ),
@@ -1158,12 +1158,12 @@
  * Stores useful strings to AFCH.msg
  */
 	function setMessages() {
-		var headerBegin = '== আপনার জমা দেওয়া খসড়াটি';
+		var headerBegin = '== [[WP:AFC|নিবন্ধ সৃষ্টিকরণে]] আপনার জমা';
 		AFCH.msg.set( {
 			// $1 = article name
 			// $2 = article class or '' if not available
 			'accepted-submission': headerBegin +
-		'[[:$1]]গৃহীত হয়েছে ==\n{{subst:AFC talk|$1|class=$2|sig=~~' +
+		' [[:$1]] গৃহীত হয়েছে ==\n{{subst:AFC talk|$1|class=$2|sig=~~' +
 		'~~}}',
 
 			// $1 = full submission title
@@ -1175,7 +1175,7 @@
 			// $7 = additional parameter for second decline reason
 			// $8 = additional comment
 			'declined-submission': headerBegin +
-		'[[:$1|$2]]: মানোন্নয়ন প্রয়োজন ({{subst:CURRENTMONTHNAME}}{{subst:CURRENTDAY}}তারিখে)==\n{{subst:Afc decline|full=$1|cv=$3|reason=$4|details=$5|reason2=$6|details2=$7|comment=$8|sig=yes}}',
+		' [[:$1|$2]] প্রত্যাখ্যাত হয়েছে ({{subst:CURRENTMONTHNAME}} {{subst:CURRENTDAY}} তারিখে)==\n{{subst:Afc decline|full=$1|cv=$3|reason=$4|details=$5|reason2=$6|details2=$7|comment=$8|sig=yes}}',
 
 			// $1 = full submission title
 			// $2 = short title
@@ -1185,13 +1185,13 @@
 			// $6 = second reject reason details
 			// $7 = comment by reviewer
 			'rejected-submission': headerBegin +
-		'[[:$1|$2]]({{subst:CURRENTMONTHNAME}}{{subst:CURRENTDAY}}তারিখ) ==\n{{subst:Afc decline|full=$1|reason=$3|details=$4|reason2=$5|details2=$6|comment=$7|sig=yes}}',
+		' [[:$1|$2]] প্রত্যাখ্যাত হয়েছে ({{subst:CURRENTMONTHNAME}} {{subst:CURRENTDAY}} তারিখে) ==\n{{subst:Afc decline|full=$1|reason=$3|details=$4|reason2=$5|details2=$6|comment=$7|sig=yes}}',
 
 			// $1 = article name
 			'comment-on-submission': '{{subst:AFC notification|comment|article=$1}}',
 
 			// $1 = article name
-			'o7-submission': '{{subst:Db-afc-notice|$1}} ~~' +
+			'g13-submission: '{{subst:Db-afc-notice|$1}} ~~' +
 		'~~',
 
 			'teahouse-invite': '{{subst:AFC invitation|sign=~~' +
@@ -1259,19 +1259,19 @@
 						.attr( 'id', 'reloadLink' )
 						.addClass( 'text-smaller' )
 						.attr( 'href', mw.util.getUrl() )
-						.text( '（পুনরায় লোড...）' ) );
+						.text( '（পুনঃলোডিং...）' ) );
 
 			// Show a link to the next random submissions
-			new AFCH.status.Element( 'যান$1 &raquo;', {
+			new AFCH.status.Element( 'দেখুন $1 &raquo;', {
 				$1: AFCH.makeLinkElementToCategory(
-					'পর্যালোচনার জন্য অপেক্ষমাণ খসড়া', 'এলোমেলো খসড়া' )
+					'পর্যালোচনার জন্য অপেক্ষমাণ খসড়া', 'যেকোনো একটি খসড়া' )
 			} );
 
 			// Also, automagically reload the page in place
 			$( '#mw-content-text' )
 				.load( AFCH.consts.pagelink + ' #mw-content-text', function () {
 					$afch.find( '#reloadLink' )
-						.text( '（পুনরায় লোড করতে ক্লিক করুন）' );
+						.text( '（পুনঃলোড করতে ক্লিক করুন）' );
 					// Fire the hook for new page content
 					mw.hook( 'wikipage.content' ).fire( $( '#mw-content-text' ) );
 				} );
@@ -1654,7 +1654,7 @@
 							'”ও<a href="/wiki/Mediawiki:Titleblacklist">স্থানীয়</a>বা<a href="/wiki/m:Title blacklist">বৈশ্বিক</a>কালোতালিকাভুক্ত<code>' +
 							isBlacklisted.reason.replace(
 								/^(.*)<code>(.*)<\/code>(.*)$/, '$2' ) +
-							'</code>সহযোগিতা ও প্রতিষ্ঠা নিষেধ।';
+							'</code>সহযোগিতা ও তৈরি নিষেধ।';
 										buttonText = 'লক্ষ্য পৃষ্ঠাটির শিরোনাম কালো তালিকাভুক্ত রয়েছে';
 									}
 
@@ -2004,9 +2004,9 @@
 		addFormSubmitHandler( handleSubmit );
 	}
 
-	function showPostponeO7Options() {
-		loadView( 'postpone-o7', {} );
-		addFormSubmitHandler( handlePostponeO7 );
+	function showPostponeg13Options() {
+		loadView( 'postpone-g13', {} );
+		addFormSubmitHandler( handlePostponeg13 );
 	}
 
 	// These functions actually perform a given action using data passed
@@ -2346,8 +2346,8 @@
 					AFCH.actions.notifyUser( submitter, {
 						message: message,
 						summary: isDecline ?
-							'বিজ্ঞপ্তি: অতিশীঘ্র জমা দেওয়া খসড়া [[' + AFCH.consts.pagename + ']] এখনও উন্নতি দরকার' :
-							'বিজ্ঞপ্তি: অতিশীঘ্র জমা দেওয়া খসড়া [[' + AFCH.consts.pagename + ']]পুনঃজমা প্রত্যাখ্যান করা হয়েছে'
+							'বিজ্ঞপ্তি: অতিশীঘ্র জমা দেওয়া খসড়া [[' + AFCH.consts.pagename + ']] প্রত্যাখ্যাত হয়েছে' :
+							'বিজ্ঞপ্তি: অতিশীঘ্র জমা দেওয়া খসড়া [[' + AFCH.consts.pagename + ']] পুনঃজমা প্রত্যাখ্যান করা হয়েছে'
 					} );
 				} );
 			} );
@@ -2383,8 +2383,8 @@
 				AFCH.actions.notifyUser( submitter, {
 					message:
 			AFCH.msg.get( 'comment-on-submission', { $1: AFCH.consts.pagename } ),
-					summary: 'বিজ্ঞপ্তি: খসড়ায় [[' + AFCH.consts.pagename +
-			']] মন্তব্য রাখুন'
+					summary: 'বিজ্ঞপ্তি: [[' + AFCH.consts.pagename +
+			']] খসড়ায় মন্তব্য'
 				} );
 			} );
 		}
@@ -2461,14 +2461,14 @@
     } );
 }
 
-	function handleO7() {
+	function handleg13() {
 		// We start getting the creator now (for notification later) because ajax is
 		// radical and handles simultaneous requests, but we don't let it delay
 		// tagging
 		var gotCreator = afchPage.getCreator();
 
 		// Update the display
-		prepareForProcessing( 'Requesting', 'o7' );
+		prepareForProcessing( 'Requesting', 'g13' );
 
 		// Get the page text and the last modified date (cached!) and tag the page
 		$.when( afchPage.getText( false ), afchPage.getLastModifiedDate() )
@@ -2476,12 +2476,12 @@
 				var text = new AFCH.Text( rawText );
 
 				// Add the deletion tag and clean up for good measure
-				text.prepend('{{delete|O7' + '}}\n' );
+				text.prepend('{{delete|g13' + '}}\n' );
 				text.cleanUp();
 
 				afchPage.edit( {
 					contents: text.get(),
-					summary: 'কপিরাইট লঙ্ঘনের জন্য দ্রুত অপসারণ অনুরোধ'
+					summary: 'কপিরাইট লঙ্ঘনের কারণে দ্রুত অপসারণ অনুরোধ'
 				} );
 
 				// Now notify the page creator as well as any and all previous
@@ -2499,9 +2499,9 @@
 					$.each( usersToNotify, function ( _, user ) {
 						AFCH.actions.notifyUser( user, {
 							message:
-					AFCH.msg.get( 'o7-submission', { $1: AFCH.consts.pagename } ),
+					AFCH.msg.get( 'g13-submission', { $1: AFCH.consts.pagename } ),
 							summary: 'বিজ্ঞপ্তি：[[' + AFCH.consts.pagename +
-					']] দ্রুত অপসারণ মনোনয়ন（[[WP:O7|CSD O7]]）'
+					']] দ্রুত অপসারণ প্রস্তাবনা（[[WP:g13|CSD G13]]）'
 						} );
 					} );
 
@@ -2509,29 +2509,29 @@
 					// notified
 					AFCH.actions.logCSD( {
 						title: afchPage.rawTitle,
-						reason: '[[WP:O7]] ({{tl|db-afc}})',
+						reason: '[[WP:G13]] ({{tl|db-afc}})',
 						usersNotified: usersToNotify
 					} );
 				} );
 			} );
 	}
 
-	function handlePostponeO7( data ) {
+	function handlePostponeg13( data ) {
 		var postponeCode,
 			text = data.afchText, rawText = text.get(),
-			postponeRegex = /\{\{AfC postpone O7\s*(?:\|\s*(\d*)\s*)?\}\}/ig;
+			postponeRegex = /\{\{AfC postpone G13\s*(?:\|\s*(\d*)\s*)?\}\}/ig;
 		match = postponeRegex.exec( rawText );
 
 		// First add the postpone template
 		if ( match ) {
 			if ( match[ 1 ] !== undefined ) {
-				postponeCode = '{{AfC postpone O7|' + ( parseInt( match[ 1 ] ) + 1 ) + '}}';
+				postponeCode = '{{AfC postpone G13|' + ( parseInt( match[ 1 ] ) + 1 ) + '}}';
 			} else {
-				postponeCode = '{{AfC postpone O7|2}}';
+				postponeCode = '{{AfC postpone G13|2}}';
 			}
 			rawText = rawText.replace( match[ 0 ], postponeCode );
 		} else {
-			rawText += '\n{{AfC postpone O7|1}}';
+			rawText += '\n{{AfC postpone G13|1}}';
 		}
 
 		text.set( rawText );
@@ -2544,7 +2544,7 @@
 
 		text.cleanUp();
 
-		afchPage.edit( { contents: text.get(), summary: 'বন্ধ করুন [[WP:O7|CSD O7]]' } );
+		afchPage.edit( { contents: text.get(), summary: '[[WP:G13|CSD G13]] বন্ধ করুন' } );
 	}
 }( AFCH, jQuery, mediaWiki ) );
 //</nowiki>
